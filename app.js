@@ -204,6 +204,71 @@ if(videoForm){
 }
 
 
+// Local fallback video renderer: uses browser canvas, not a cloud AI quota.
+async function createLocalFallbackVideo(productName, productFacts, audience, goal, productImages, humanImage, index) {
+ if (!window.MediaRecorder || !HTMLCanvasElement.prototype.captureStream) {
+  throw new Error("Browser ini belum mendukung render video lokal. Coba Chrome terbaru di Android.");
+ }
+ const canvas=document.createElement("canvas"); canvas.width=720; canvas.height=1280;
+ const ctx=canvas.getContext("2d"); if(!ctx) throw new Error("Canvas tidak tersedia.");
+ const imageInputs=[...(productImages||[]),...(humanImage?[humanImage]:[])].filter(x=>x&&x.data);
+ const images=[];
+ for(const item of imageInputs.slice(0,4)){
+  const img=new Image();
+  img.src="data:"+(item.mimeType||"image/jpeg")+";base64,"+item.data;
+  await new Promise((resolve,reject)=>{img.onload=resolve;img.onerror=()=>reject(new Error("Foto produk tidak dapat dibaca."));});
+  images.push(img);
+ }
+ const cleanName=String(productName||"Produk pilihan").slice(0,70);
+ const facts=String(productFacts||"Lihat detail produk sebelum membeli").slice(0,110);
+ const lines=["Temukan produk yang cocok buat kamu",cleanName,facts,"Cek detail & harga terbaru","Klik keranjang kuning"];
+ const stream=canvas.captureStream(24);
+ const mimeType=MediaRecorder.isTypeSupported("video/webm;codecs=vp9")?"video/webm;codecs=vp9":(MediaRecorder.isTypeSupported("video/webm;codecs=vp8")?"video/webm;codecs=vp8":"video/webm");
+ const recorder=new MediaRecorder(stream,{mimeType});
+ const chunks=[];
+ recorder.ondataavailable=e=>{if(e.data&&e.data.size)chunks.push(e.data);};
+ const finished=new Promise((resolve,reject)=>{recorder.onerror=()=>reject(new Error("Gagal merekam video lokal."));recorder.onstop=()=>resolve(new Blob(chunks,{type:recorder.mimeType||"video/webm"}));});
+ const started=performance.now();
+ const duration=9000;
+ function draw(now){
+  const t=Math.min(1,(now-started)/duration);
+  const phase=Math.min(4,Math.floor(t*5));
+  const local=(t*5)%1;
+  const g=ctx.createLinearGradient(0,0,720,1280);g.addColorStop(0,"#11152b");g.addColorStop(1,"#283c55");ctx.fillStyle=g;ctx.fillRect(0,0,720,1280);
+  if(images.length){
+   const img=images[Math.min(images.length-1,Math.floor(t*images.length))];
+   const scale=Math.max(720/img.width,820/img.height)*(1+0.08*local);
+   const w=img.width*scale,h=img.height*scale;
+   ctx.save();ctx.beginPath();ctx.rect(0,110,720,850);ctx.clip();
+   ctx.drawImage(img,(720-w)/2-12*local,(110+850-h)/2,w,h);ctx.restore();
+   const shade=ctx.createLinearGradient(0,700,0,1000);shade.addColorStop(0,"rgba(8,10,25,0)");shade.addColorStop(1,"rgba(8,10,25,0.95)");ctx.fillStyle=shade;ctx.fillRect(0,600,720,380);
+  }else{
+   ctx.fillStyle="rgba(255,255,255,.08)";ctx.beginPath();ctx.roundRect(70,300,580,500,32);ctx.fill();
+   ctx.font="bold 110px sans-serif";ctx.fillStyle="#fff";ctx.textAlign="center";ctx.fillText("✦",360,560);
+   ctx.font="bold 38px sans-serif";ctx.fillText("VIDEO PRODUK",360,630);
+  }
+  ctx.fillStyle="rgba(8,10,25,.75)";ctx.fillRect(32,34,656,90);
+  ctx.textAlign="left";ctx.fillStyle="#fff";ctx.font="bold 27px sans-serif";ctx.fillText("REKOMENDASI PRODUK",54,88);
+  ctx.fillStyle="#fff";ctx.textAlign="center";
+  const title=phase===0?"Lagi cari produk yang pas?":phase===1?cleanName:phase===2?"Lihat detail produknya":phase===3?"Pilih sesuai kebutuhanmu":"Cek sebelum membeli";
+  ctx.font="bold 38px sans-serif";wrapCanvasText(ctx,title,360,1020,620,48);
+  ctx.font="24px sans-serif";ctx.fillStyle="#e6e9ff";wrapCanvasText(ctx,phase===1?facts:(phase===4?"Cek harga terbaru di keranjang kuning":String(goal||"Cek detail produk")),360,1120,600,36);
+  ctx.fillStyle="#ffcf40";ctx.beginPath();ctx.roundRect(110,1180,500,66,24);ctx.fill();
+  ctx.fillStyle="#16182b";ctx.font="bold 28px sans-serif";ctx.fillText("CEK PRODUK SEKARANG",360,1223);
+  if(t<1) requestAnimationFrame(draw); else setTimeout(()=>recorder.stop(),120);
+ }
+ function wrapCanvasText(c,text,x,y,maxWidth,lineHeight){
+  const words=String(text||"").split(/\s+/);let line="",yy=y;
+  for(const word of words){const test=line?line+" "+word:word;if(c.measureText(test).width>maxWidth&&line){c.fillText(line,x,yy);line=word;yy+=lineHeight;}else line=test;}
+  if(line)c.fillText(line,x,yy);
+ }
+ recorder.start(250);
+ requestAnimationFrame(draw);
+ const blob=await finished;
+ stream.getTracks().forEach(track=>track.stop());
+ return {url:URL.createObjectURL(blob),mimeType:blob.type||"video/webm"};
+}
+
 // AI video render: render a separate MP4 for each selected concept.
 const renderVideoButton = document.querySelector("#renderVideoBtn");
 if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
@@ -242,17 +307,27 @@ if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
     productFacts:document.querySelector("#vfacts").value.trim(),voiceTone:document.querySelector("#vtone").value.trim()||"natural dan meyakinkan",
     renderPrompt:variation,productImages,humanImage,language:"Bahasa Indonesia"
    })});
-   const data = await response.json(); if (!response.ok || !data.ok) throw new Error("Video " + index + ": " + (data.error || "Render gagal."));
-   const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
-   for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-   const objectUrl = URL.createObjectURL(new Blob([bytes],{type:data.mimeType||"video/mp4"}));
+   const data = await response.json();
+   let objectUrl, outputMime;
+   if (!response.ok || !data.ok) {
+    const quotaHit = response.status === 429 || /kuota|limit|quota|rate.?limit/i.test(data.error || "");
+    if (!quotaHit) throw new Error("Video " + index + ": " + (data.error || "Render gagal."));
+    status.textContent = "Kuota AI habis. Membuat video alternatif lokal " + index + "/" + count + " dari foto dan teks…";
+    const local = await createLocalFallbackVideo(name, document.querySelector("#vfacts").value.trim(), document.querySelector("#vaudience").value.trim(), document.querySelector("#vgoal").value, productImages, humanImage, index);
+    objectUrl = local.url; outputMime = local.mimeType;
+   } else {
+    const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
+    for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+    outputMime = data.mimeType || "video/mp4";
+    objectUrl = URL.createObjectURL(new Blob([bytes],{type:outputMime}));
+   }
    const card=document.createElement("article");card.style.cssText="background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:12px;margin:12px 0";
-   const heading=document.createElement("h3");heading.textContent="Video "+index+" dari "+count;
+   const heading=document.createElement("h3");heading.textContent="Video "+index+" dari "+count+(outputMime.includes("webm")?" · Mode lokal (tanpa kuota AI)":" · AI");
    const video=document.createElement("video");video.controls=true;video.playsInline=true;video.src=objectUrl;video.style.cssText="display:block;width:100%;max-width:420px;border-radius:14px;margin:12px 0;background:#000";
-   const link=document.createElement("a");link.href=objectUrl;link.download=name.toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-video-"+index+".mp4";link.textContent="Simpan MP4 "+index+" ke HP";
+   const link=document.createElement("a");link.href=objectUrl;link.download=name.toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-video-"+index+(outputMime.includes("webm")?".webm":".mp4");link.textContent="Simpan video "+index+" ke HP";
    card.append(heading,video,link);output.appendChild(card);completed++;
   }
-  status.textContent = completed + "/" + count + " video MP4 berhasil dibuat. Simpan tiap file ke HP dan periksa akurasi produk sebelum dipublikasikan.";
+  status.textContent = completed + "/" + count + " video selesai. Jika kuota AI habis, video lokal dibuat dari foto dan teks (tanpa voice-over AI). Simpan tiap file ke HP dan periksa akurasi produk sebelum dipublikasikan.";
  } catch(err) {
   status.textContent = completed + "/" + count + " video berhasil dibuat. Proses berhenti: " + (err?.message||"periksa akses model, kuota, dan billing Gemini.") + (completed ? " Video yang sudah selesai tetap bisa disimpan." : "");
  } finally { renderVideoButton.disabled=false; }
