@@ -2,7 +2,22 @@ const $=s=>document.querySelector(s);
 const fresh=()=>({p:[],c:[],q:[],m:[]});
 let d;try{d=JSON.parse(localStorage.agentos)||fresh()}catch{d=fresh()}
 for(const k of ["p","c","q","m"])if(!Array.isArray(d[k]))d[k]=[];
-function save(){localStorage.agentos=JSON.stringify(d);render()}
+let cloudClient=null,cloudUser=null,cloudReady=false,syncTimer=null;
+function save(){
+ localStorage.agentos=JSON.stringify(d);render();
+ if(cloudClient&&cloudUser){
+  clearTimeout(syncTimer);
+  syncTimer=setTimeout(async()=>{
+   const status=$("#syncStatus");
+   try{
+    if(status)status.textContent="Menyinkronkan ke cloud…";
+    const {error}=await cloudClient.from("agent_workspaces").upsert({user_id:cloudUser.id,workspace:d,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+    if(error)throw error;
+    cloudReady=true;if(status)status.textContent="☁ Tersinkron ke Supabase";
+   }catch(err){if(status)status.textContent="Sinkronisasi gagal: "+(err.message||"cek konfigurasi Supabase");}
+  },500);
+ }
+}
 function esc(x=""){return String(x).replace(/[&<>"']/g,c=>({"&":"&amp;","<":"&lt;",">":"&gt;",'"':"&quot;","'":"&#39;"}[c]))}
 function rupiah(n){return "Rp"+Number(n||0).toLocaleString("id-ID")}
 function show(id){document.querySelectorAll(".page").forEach(x=>x.classList.toggle("active",x.id===id));$("#title").textContent=({home:"Dashboard",products:"Riset Produk",studio:"Studio Konten",queue:"Antrean & Jadwal",stats:"Analitik"})[id]||id}
@@ -57,3 +72,30 @@ if(endpointInput&&agentForm){
   finally{button.disabled=false}
  };
 }
+
+// Cloud sync: Supabase Auth anonymous user + row-level security workspace.
+(async function initCloudSync(){
+ const status=$("#syncStatus");
+ const endpoint="https://zcwiuvawmovkfbalgyyx.supabase.co";
+ const publishableKey=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
+ if(!window.supabase?.createClient){if(status)status.textContent="Cloud sync belum tersedia (library Supabase gagal dimuat). Data masih lokal.";return;}
+ try{
+  cloudClient=window.supabase.createClient(endpoint,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
+  let {data:sessionData,error:sessionError}=await cloudClient.auth.getSession();
+  if(sessionError)throw sessionError;
+  let user=sessionData.session?.user;
+  if(!user){const signed=await cloudClient.auth.signInAnonymously();if(signed.error)throw signed.error;user=signed.data.user;}
+  if(!user)throw new Error("Sesi pengguna tidak tersedia.");
+  cloudUser=user;
+  const {data:row,error:readError}=await cloudClient.from("agent_workspaces").select("workspace").eq("user_id",user.id).maybeSingle();
+  if(readError)throw readError;
+  if(row?.workspace&&typeof row.workspace==="object"){
+   const cloud=row.workspace;for(const k of ["p","c","q","m"])if(!Array.isArray(cloud[k]))cloud[k]=[];
+   d=cloud;localStorage.agentos=JSON.stringify(d);render();if(status)status.textContent="☁ Data dimuat dari Supabase";
+  }else{
+   const {error:writeError}=await cloudClient.from("agent_workspaces").upsert({user_id:user.id,workspace:d,updated_at:new Date().toISOString()},{onConflict:"user_id"});
+   if(writeError)throw writeError;if(status)status.textContent="☁ Data lokal pertama kali disalin ke Supabase";
+  }
+  cloudReady=true;
+ }catch(err){cloudClient=null;cloudUser=null;if(status)status.textContent="Cloud belum tersambung: "+(err?.message||"Aktifkan Anonymous Sign-ins di Supabase Auth. Data lokal tetap aman.");}
+})();
