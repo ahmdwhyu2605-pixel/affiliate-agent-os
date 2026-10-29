@@ -54,7 +54,7 @@ if(endpointInput&&agentForm){
   try{localStorage.agentos_endpoint=endpoint;localStorage.agentos_anon_key=anonKey}catch{}
   button.disabled=true;status.textContent="AI sedang bekerja…";output.innerHTML="";
   try{
-   if(!cloudClient)throw new Error("Sesi cloud belum siap. Aktifkan Anonymous Sign-ins di Supabase Auth lalu muat ulang halaman.");
+   if(!cloudClient||!cloudUser)throw new Error("Login akun dulu supaya sesi cloud siap.");
    const {data:authData,error:authError}=await cloudClient.auth.getSession();
    if(authError)throw authError;
    const accessToken=authData.session?.access_token;
@@ -78,30 +78,63 @@ if(endpointInput&&agentForm){
  };
 }
 
-// Cloud sync: Supabase Auth anonymous user + row-level security workspace.
+// Account authentication: email/password, no anonymous sessions.
 (async function initCloudSync(){
- const status=$("#syncStatus");
+ const status=$("#syncStatus"),overlay=$("#authGate"),authStatus=$("#authStatus");
  const endpoint="https://zcwiuvawmovkfbalgyyx.supabase.co";
  const publishableKey=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
- if(!window.supabase?.createClient){if(status)status.textContent="Cloud sync belum tersedia (library Supabase gagal dimuat). Data masih lokal.";return;}
+ if(!window.supabase?.createClient){if(status)status.textContent="Supabase gagal dimuat; data tetap lokal.";if(overlay)overlay.hidden=false;return;}
  try{
-  cloudClient=window.supabase.createClient(endpoint,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:false}});
-  let {data:sessionData,error:sessionError}=await cloudClient.auth.getSession();
-  if(sessionError)throw sessionError;
-  let user=sessionData.session?.user;
-  if(!user){const signed=await cloudClient.auth.signInAnonymously();if(signed.error)throw signed.error;user=signed.data.user;}
-  if(!user)throw new Error("Sesi pengguna tidak tersedia.");
+  cloudClient=window.supabase.createClient(endpoint,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
+  const {data,error}=await cloudClient.auth.getSession();if(error)throw error;
+  if(data.session?.user){await attachAccount(data.session.user);return;}
+  if(overlay)overlay.hidden=false;
+  if(status)status.textContent="Login diperlukan untuk sinkronisasi cloud";
+ }catch(err){if(overlay)overlay.hidden=false;if(authStatus)authStatus.textContent="Gagal menyiapkan login: "+(err.message||"cek koneksi");if(status)status.textContent="Cloud belum tersambung; data lokal tetap aman.";}
+ async function attachAccount(user){
   cloudUser=user;
   const {data:row,error:readError}=await cloudClient.from("agent_workspaces").select("workspace").eq("user_id",user.id).maybeSingle();
   if(readError)throw readError;
   if(row?.workspace&&typeof row.workspace==="object"){
    const cloud=row.workspace;for(const k of ["p","c","q","m"])if(!Array.isArray(cloud[k]))cloud[k]=[];
-   d=cloud;localStorage.agentos=JSON.stringify(d);render();if(status)status.textContent="☁ Data dimuat dari Supabase";
+   // Prefer the cloud workspace when it already contains saved data; otherwise migrate local device data.
+   const cloudHasData=["p","c","q","m"].some(k=>cloud[k].length>0);
+   const localHasData=["p","c","q","m"].some(k=>d[k].length>0);
+   if(!cloudHasData&&localHasData){
+    const {error}=await cloudClient.from("agent_workspaces").upsert({user_id:user.id,workspace:d,updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;
+   }else{d=cloud;localStorage.agentos=JSON.stringify(d);render();}
   }else{
-   const {error:writeError}=await cloudClient.from("agent_workspaces").upsert({user_id:user.id,workspace:d,updated_at:new Date().toISOString()},{onConflict:"user_id"});
-   if(writeError)throw writeError;if(status)status.textContent="☁ Data lokal pertama kali disalin ke Supabase";
+   const {error}=await cloudClient.from("agent_workspaces").upsert({user_id:user.id,workspace:d,updated_at:new Date().toISOString()},{onConflict:"user_id"});if(error)throw error;
   }
-  cloudReady=true;
- }catch(err){cloudClient=null;cloudUser=null;if(status)status.textContent="Cloud belum tersambung: "+(err?.message||"Aktifkan Anonymous Sign-ins di Supabase Auth. Data lokal tetap aman.");}
+  cloudReady=true;if(overlay)overlay.hidden=true;if(status)status.textContent="☁ Login: "+(user.email||"akun aktif")+" · data tersinkron";
+  if(authStatus)authStatus.textContent="";
+ }
+ async function loginAction(mode){
+  const email=$("#authEmail").value.trim(),password=$("#authPassword").value;
+  if(!email){authStatus.textContent="Masukkan email dulu.";return;}
+  authStatus.textContent="Memproses…";
+  try{
+   if(mode==="signup"){
+    if(password.length<8)throw new Error("Password minimal 8 karakter.");
+    const {data,error}=await cloudClient.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+    if(error)throw error;
+    if(data.session?.user){await attachAccount(data.session.user);}
+    else authStatus.textContent="Akun dibuat. Cek email untuk verifikasi, lalu login.";
+   }else if(mode==="login"){
+    const {data,error}=await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;
+    if(!data.user)throw new Error("Login belum menghasilkan sesi.");await attachAccount(data.user);
+   }else if(mode==="reset"){
+    const {error}=await cloudClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error;
+    authStatus.textContent="Link reset password dikirim jika email terdaftar. Periksa inbox/spam.";
+   }
+  }catch(err){authStatus.textContent=err.message||"Autentikasi gagal.";}
+ }
+ $("#authLogin")?.addEventListener("click",()=>loginAction("login"));
+ $("#authSignup")?.addEventListener("click",()=>loginAction("signup"));
+ $("#authReset")?.addEventListener("click",()=>loginAction("reset"));
+ $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();loginAction("login");}});
+ cloudClient.auth.onAuthStateChange(async(event,session)=>{
+  if(session?.user&&!cloudUser){try{await attachAccount(session.user);}catch(err){if(authStatus)authStatus.textContent="Login berhasil, sinkronisasi gagal: "+err.message;}}
+  if(event==="SIGNED_OUT"){cloudUser=null;if(overlay)overlay.hidden=false;if(status)status.textContent="Silakan login kembali.";}
+ });
 })();
-
