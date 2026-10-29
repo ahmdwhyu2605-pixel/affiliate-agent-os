@@ -1,23 +1,29 @@
 # Affiliate Agent OS
 
-Dashboard mobile untuk mengelola produk affiliate, draft konten, jadwal, analitik, backup, dan bantuan AI.
+Dashboard mobile-first untuk mengelola produk, draft konten, jadwal, metrik affiliate, backup, dan bantuan AI berbasis Gemini melalui Supabase Edge Function.
+
+## Deploy / konfigurasi
+- GitHub Pages menyajikan frontend statis.
+- Supabase project ref: `zcwiuvawmovkfbalgyyx`.
+- Edge Function: `agent-run` (riset awal, rencana 7 hari, konsep video/storyboard; bukan renderer atau publisher).
+- Tambahkan `GEMINI_API_KEY` pada Supabase Edge Function Secrets. Jangan pernah menaruh key server-side di frontend atau GitHub.
+- Aktifkan **Anonymous Sign-ins** pada Supabase Auth agar sinkronisasi workspace antar refresh di perangkat yang sama dapat bekerja.
+- Frontend memakai publishable key saja. Secret server-side tidak boleh dikirim ke browser.
+- Sinkronisasi cloud menggunakan `public.agent_workspaces`, dengan RLS sehingga pengguna hanya bisa membaca dan mengubah workspace miliknya.
+- Buka GitHub Actions untuk memastikan workflow Pages berhasil setelah commit.
 
 ## Fitur yang tersedia
-- Produk, draft template, antrean jadwal, dan catatan performa tersimpan lokal.
+- Produk manual, angle promosi, harga/komisi perkiraan.
+- Draft skrip template dan hasil AI yang dapat disimpan/disalin.
+- Antrean jadwal manual (belum mempublikasikan konten otomatis).
+- Input metrik manual dan CTR.
 - Ekspor backup JSON.
-- Login/daftar email-password Supabase untuk menyimpan satu workspace JSON per akun ke tabel `agent_workspaces`.
-- AI Agent memanggil Supabase Edge Function `agent-run` untuk riset, rencana 7 hari, dan paket konsep video.
-- Hasil AI dapat disalin atau disimpan ke Studio Konten.
+- Mode AI: riset niche (Google Search grounding bila tersedia), rencana 7 hari, konsep video.
 
-## Deployment
-GitHub Pages diterbitkan oleh workflow `.github/workflows/pages.yml` pada push ke `main`.
-Edge Function diterbitkan oleh workflow `.github/workflows/deploy-supabase-function.yml` jika secret GitHub berikut tersedia: `SUPABASE_ACCESS_TOKEN`, `SUPABASE_PROJECT_REF`, `GEMINI_API_KEY`.
+## Batasan yang diketahui
+- Tidak mengambil katalog atau komisi Shopee secara otomatis dan tidak membuat tautan affiliate milik akun.
+- Tidak merender video final dan tidak mengunggah konten otomatis.
+- Metrik penjualan/komisi masih diinput manual.
+- Sinkronisasi cloud membutuhkan Anonymous Sign-ins aktif. Bila fitur ini belum diaktifkan, aplikasi tetap menyimpan data lokal dan status sync menampilkan error.
+- Endpoint AI harus diberi autentikasi/rate limiting tambahan sebelum dipakai publik secara luas. Pembatasan CORS bukan mekanisme keamanan.
 
-## Supabase
-- URL project: `https://zcwiuvawmovkfbalgyyx.supabase.co`
-- Tabel sinkronisasi: `public.agent_workspaces`.
-- RLS wajib membatasi SELECT/INSERT/UPDATE pada `auth.uid() = user_id`.
-- Secret Gemini hanya disimpan di Supabase Edge Function Secrets, bukan di GitHub Pages atau JavaScript publik.
-
-## Batasan penting
-Sinkronisasi menyimpan seluruh workspace aplikasi sebagai satu dokumen JSON per akun; fitur ini bukan sinkronisasi tabel terpisah. AI menghasilkan teks/riset/storyboard, bukan video final, tautan affiliate resmi, auto-publish, atau data komisi aktual. Informasi produk dan klaim AI tetap harus diverifikasi.
