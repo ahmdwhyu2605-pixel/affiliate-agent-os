@@ -211,12 +211,15 @@ if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
  if (!confirm("Render video AI dapat memakai kuota berbayar Google. Lanjutkan?")) return;
  renderVideoButton.disabled = true; status.textContent = "Merender video AI; proses dapat memakan waktu beberapa menit."; output.replaceChildren();
  try {
+  const readRenderImage=async(file)=>{if(!file)return null;if(!file.type.startsWith("image/"))throw new Error("File referensi harus berupa gambar.");const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca foto."));reader.readAsDataURL(file);});const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Foto tidak bisa dibuka."));image.src=dataUrl;});const scale=Math.min(1,900/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);return {mimeType:"image/jpeg",data:canvas.toDataURL("image/jpeg",0.72).split(",")[1]};};
+  const productImages=[];for(const file of Array.from(document.querySelector("#vproductImage").files||[]).slice(0,3))productImages.push(await readRenderImage(file));
+  const humanImage=await readRenderImage(document.querySelector("#vhumanImage").files?.[0]||null);
   const response = await fetch(endpoint, {method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+sessionData.session.access_token},body:JSON.stringify({
    mode:"render",niche:"affiliate marketing Indonesia",audience:document.querySelector("#vaudience").value.trim()||"pembeli Indonesia",
    platform:document.querySelector("#vplatform").value,product:name,productUrl:url,videoStyle:document.querySelector("#vstyle").value,
    videoDuration:Number(document.querySelector("#vduration").value||30),videoGoal:document.querySelector("#vgoal").value,
    productFacts:document.querySelector("#vfacts").value.trim(),voiceTone:document.querySelector("#vtone").value.trim()||"natural dan meyakinkan",
-   renderPrompt:document.querySelector("#vprompt").value.trim(),language:"Bahasa Indonesia"
+   renderPrompt:document.querySelector("#vprompt").value.trim(),productImages,humanImage,language:"Bahasa Indonesia"
   })});
   const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || "Render video gagal.");
   const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
