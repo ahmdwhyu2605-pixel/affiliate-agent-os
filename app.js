@@ -190,3 +190,38 @@ if(videoForm){
   finally{button.disabled=false;}
  };
 }
+
+
+// AI video render: Gemini Omni Flash, API key stays server-side.
+const renderVideoButton = document.querySelector("#renderVideoBtn");
+if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
+ const status = document.querySelector("#renderStatus"), output = document.querySelector("#renderOutput");
+ const endpoint = localStorage.agentos_endpoint || "https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";
+ const key = localStorage.agentos_anon_key || "sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
+ const name = document.querySelector("#vname").value.trim(), url = document.querySelector("#vurl").value.trim();
+ if (!name || !/^https?:\/\//i.test(url)) { status.textContent = "Isi nama produk dan link produk yang valid dulu."; return; }
+ if (!cloudClient || !cloudUser) { status.textContent = "Login dulu untuk membuat video AI."; return; }
+ const {data: sessionData, error: sessionError} = await cloudClient.auth.getSession();
+ if (sessionError || !sessionData.session?.access_token) { status.textContent = "Sesi login tidak tersedia. Login ulang."; return; }
+ if (!confirm("Render video AI dapat memakai kuota berbayar Google. Lanjutkan?")) return;
+ renderVideoButton.disabled = true; status.textContent = "Merender video AI; proses dapat memakan waktu beberapa menit."; output.replaceChildren();
+ try {
+  const response = await fetch(endpoint, {method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+sessionData.session.access_token},body:JSON.stringify({
+   mode:"render",niche:"affiliate marketing Indonesia",audience:document.querySelector("#vaudience").value.trim()||"pembeli Indonesia",
+   platform:document.querySelector("#vplatform").value,product:name,productUrl:url,videoStyle:document.querySelector("#vstyle").value,
+   videoDuration:Number(document.querySelector("#vduration").value||30),videoGoal:document.querySelector("#vgoal").value,
+   productFacts:document.querySelector("#vfacts").value.trim(),voiceTone:document.querySelector("#vtone").value.trim()||"natural dan meyakinkan",
+   renderPrompt:document.querySelector("#vprompt").value.trim(),language:"Bahasa Indonesia"
+  })});
+  const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || "Render video gagal.");
+  const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
+  for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+  const objectUrl = URL.createObjectURL(new Blob([bytes],{type:data.mimeType||"video/mp4"}));
+  const video=document.createElement("video"); video.controls=true; video.playsInline=true; video.src=objectUrl;
+  video.style.cssText="display:block;width:100%;max-width:420px;border-radius:14px;margin:12px 0;background:#000";
+  const link=document.createElement("a"); link.href=objectUrl; link.download=name.toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-affiliate-ai.mp4"; link.textContent="Simpan MP4 ke HP";
+  output.append(video,link); const note=document.createElement("p"); note.className="notice"; note.textContent=data.notice||"Tinjau video sebelum dipublikasikan."; output.append(note);
+  status.textContent="Video AI berhasil dibuat. Putar lalu simpan MP4 ke HP.";
+ } catch(err) { status.textContent="Render belum berhasil: "+(err?.message||"periksa akses model, kuota, dan billing Gemini."); }
+ finally { renderVideoButton.disabled=false; }
+});
