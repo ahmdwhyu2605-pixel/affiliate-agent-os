@@ -125,13 +125,14 @@ if(endpointInput&&agentForm){
     const {data,error}=await cloudClient.auth.signUp({email,password,options:{emailRedirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"}});
     if(error)throw error;
     if(data.session?.user){await attachAccount(data.session.user);}
-    else authStatus.textContent="Akun dibuat. Cek email untuk verifikasi, lalu login.";
+    else authStatus.textContent="Akun dibuat. Jika email konfirmasi terlambat, coba login lagi setelah verifikasi atau gunakan Google/OTP setelah provider diaktifkan.";
    }else if(mode==="login"){
+    if(!password)throw new Error("Masukkan password email.");
     const {data,error}=await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;
     if(!data.user)throw new Error("Login belum menghasilkan sesi.");await attachAccount(data.user);
    }else if(mode==="reset"){
     const {error}=await cloudClient.auth.resetPasswordForEmail(email,{redirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"});if(error)throw error;
-    authStatus.textContent="Link reset password dikirim jika email terdaftar. Periksa inbox/spam.";
+    authStatus.textContent="Permintaan reset diproses. Periksa inbox/spam.";
    }
   }catch(err){authStatus.textContent=err.message||"Autentikasi gagal.";}
  }
@@ -139,5 +140,25 @@ if(endpointInput&&agentForm){
  $("#authSignup")?.addEventListener("click",()=>loginAction("signup"));
  $("#authReset")?.addEventListener("click",()=>loginAction("reset"));
  $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();loginAction("login");}});
+ $("#authGoogle")?.addEventListener("click",async()=>{
+  authStatus.textContent="Membuka login Google…";
+  try{const {error}=await cloudClient.auth.signInWithOAuth({provider:"google",options:{redirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"}});if(error)throw error;}
+  catch(err){authStatus.textContent="Login Google belum aktif di Supabase: "+(err.message||"cek konfigurasi provider Google");}
+ });
+ $("#authSendOtp")?.addEventListener("click",async()=>{
+  const phone=$("#authPhone").value.trim();
+  if(!/^\+[1-9]\d{7,14}$/.test(phone)){authStatus.textContent="Masukkan nomor HP format internasional, contoh +6281234567890.";return;}
+  authStatus.textContent="Mengirim kode OTP…";
+  try{const {error}=await cloudClient.auth.signInWithOtp({phone,options:{shouldCreateUser:true}});if(error)throw error;authStatus.textContent="Permintaan OTP berhasil. Cek SMS; kode berlaku singkat.";}
+  catch(err){authStatus.textContent="OTP belum terkirim: "+(err.message||"pastikan Phone Auth dan provider SMS sudah aktif di Supabase.");}
+ });
+ $("#authVerifyOtp")?.addEventListener("click",async()=>{
+  const phone=$("#authPhone").value.trim(),token=$("#authOtp").value.trim();
+  if(!/^\+[1-9]\d{7,14}$/.test(phone)){authStatus.textContent="Masukkan nomor HP format internasional.";return;}
+  if(!/^\d{6}$/.test(token)){authStatus.textContent="Masukkan kode OTP 6 digit.";return;}
+  authStatus.textContent="Memverifikasi kode…";
+  try{const {data,error}=await cloudClient.auth.verifyOtp({phone,token,type:"sms"});if(error)throw error;if(!data.user)throw new Error("Verifikasi tidak menghasilkan akun.");await attachAccount(data.user);}
+  catch(err){authStatus.textContent="Verifikasi OTP gagal: "+(err.message||"periksa kode dan konfigurasi SMS.");}
+ });
 
 })();
