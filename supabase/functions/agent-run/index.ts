@@ -27,6 +27,15 @@ Deno.serve(async (req: Request) => {
   if (req.method !== "POST") return respond({ ok: false, error: "Gunakan metode POST." }, 405, origin);
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return respond({ ok: false, configured: false, error: "GEMINI_API_KEY belum dipasang pada Supabase Edge Function Secrets." }, 503, origin);
+  const supabaseUrl = "https://zcwiuvawmovkfbalgyyx.supabase.co";
+  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+  const authorization = req.headers.get("authorization") || "";
+  const bearer = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
+  if (!publishableKey || !bearer || bearer === publishableKey) return respond({ ok: false, error: "Sesi pengguna tidak valid. Muat ulang aplikasi dan coba lagi." }, 401, origin);
+  try {
+    const authResponse = await fetch(supabaseUrl + "/auth/v1/user", { headers: { apikey: publishableKey, Authorization: "Bearer " + bearer }, signal: AbortSignal.timeout(8000) });
+    if (!authResponse.ok) return respond({ ok: false, error: "Sesi pengguna kedaluwarsa. Muat ulang aplikasi dan coba lagi." }, 401, origin);
+  } catch { return respond({ ok: false, error: "Tidak dapat memverifikasi sesi pengguna." }, 502, origin); }
   const length = Number(req.headers.get("content-length") || 0);
   if (length > 12000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
   let body: Record<string, unknown>;
