@@ -16,6 +16,23 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+      - name: Validate frontend JavaScript
+        run: |
+          node --check app.js
+          node <<'NODE'
+          const fs = require('node:fs');
+          const html = fs.readFileSync('index.html', 'utf8');
+          const js = fs.readFileSync('app.js', 'utf8');
+          const ids = [...html.matchAll(/\bid="([^"]+)"/g)].map(m => m[1]);
+          const duplicates = ids.filter((id, i) => ids.indexOf(id) !== i);
+          const refs = [...js.matchAll(/\$\("#([^"]+)"\)|querySelector\("#([^"]+)"\)/g)].map(m => m[1] || m[2]);
+          const missing = [...new Set(refs.filter(id => !ids.includes(id)))];
+          if (duplicates.length || missing.length) {
+            console.error(JSON.stringify({ duplicates, missing }, null, 2));
+            process.exit(1);
+          }
+          console.log('Frontend syntax and selector checks passed.');
+          NODE
       - name: Configure Pages
         uses: actions/configure-pages@v5
       - name: Upload site
