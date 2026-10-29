@@ -87,7 +87,13 @@ if(endpointInput&&agentForm){
  try{
   cloudClient=window.supabase.createClient(endpoint,publishableKey,{auth:{persistSession:true,autoRefreshToken:true,detectSessionInUrl:true}});
   const {data,error}=await cloudClient.auth.getSession();if(error)throw error;
-  if(data.session?.user){await attachAccount(data.session.user);return;}
+  if(data.session?.user&&!data.session.user.is_anonymous){await attachAccount(data.session.user);return;}
+  if(data.session?.user?.is_anonymous){
+   // Preserve any anonymous cloud workspace on this device before ending that temporary session.
+   const oldUser=data.session.user;
+   try{const {data:oldRow}=await cloudClient.from("agent_workspaces").select("workspace").eq("user_id",oldUser.id).maybeSingle();if(oldRow?.workspace&&typeof oldRow.workspace==="object"){const old=oldRow.workspace;for(const k of ["p","c","q","m"])if(!Array.isArray(old[k]))old[k]=[];if(["p","c","q","m"].some(k=>old[k].length>0))d=old;localStorage.agentos=JSON.stringify(d);render();}}catch{}
+   await cloudClient.auth.signOut();
+  }
   if(overlay)overlay.hidden=false;
   if(status)status.textContent="Login diperlukan untuk sinkronisasi cloud";
  }catch(err){if(overlay)overlay.hidden=false;if(authStatus)authStatus.textContent="Gagal menyiapkan login: "+(err.message||"cek koneksi");if(status)status.textContent="Cloud belum tersambung; data lokal tetap aman.";}
@@ -133,8 +139,5 @@ if(endpointInput&&agentForm){
  $("#authSignup")?.addEventListener("click",()=>loginAction("signup"));
  $("#authReset")?.addEventListener("click",()=>loginAction("reset"));
  $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();loginAction("login");}});
- cloudClient.auth.onAuthStateChange(async(event,session)=>{
-  if(session?.user&&!cloudUser){try{await attachAccount(session.user);}catch(err){if(authStatus)authStatus.textContent="Login berhasil, sinkronisasi gagal: "+err.message;}}
-  if(event==="SIGNED_OUT"){cloudUser=null;if(overlay)overlay.hidden=false;if(status)status.textContent="Silakan login kembali.";}
- });
+
 })();
