@@ -27,8 +27,9 @@ render();
 // AI Agent UI: calls the deployed Supabase Edge Function; endpoint is saved only on this device.
 const endpointInput=$("#endpoint"), anonInput=$("#anonKey"), agentForm=$("#af");
 if(endpointInput&&agentForm){
- try{endpointInput.value=localStorage.agentos_endpoint||"";anonInput.value=localStorage.agentos_anon_key||""}catch{}
- endpointInput.addEventListener("change",()=>{try{localStorage.agentos_endpoint=endpointInput.value.trim()}catch{}});\n anonInput.addEventListener("change",()=>{try{localStorage.agentos_anon_key=anonInput.value.trim()}catch{}});
+ try{endpointInput.value=localStorage.agentos_endpoint||"https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";anonInput.value=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn"}catch{}
+ endpointInput.addEventListener("change",()=>{try{localStorage.agentos_endpoint=endpointInput.value.trim()}catch{}});
+ anonInput.addEventListener("change",()=>{try{localStorage.agentos_anon_key=anonInput.value.trim()}catch{}});
  agentForm.onsubmit=async e=>{
   e.preventDefault();
   const endpoint=endpointInput.value.trim(),anonKey=anonInput.value.trim(),status=$("#agentStatus"),output=$("#agentOutput"),button=$("#runAgent");
