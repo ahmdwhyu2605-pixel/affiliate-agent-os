@@ -23,3 +23,30 @@ $("#mf").onsubmit=e=>{e.preventDefault();const views=Math.max(0,Number($("#mv").
 window.copyDraft=i=>{const t=d.c[i]?.text;if(!t)return;if(navigator.clipboard&&navigator.clipboard.writeText)navigator.clipboard.writeText(t).then(()=>alert("Draft disalin")).catch(()=>prompt("Salin draft ini",t));else prompt("Salin draft ini",t)};
 $("#backup").onclick=()=>{const a=document.createElement("a"),url=URL.createObjectURL(new Blob([JSON.stringify(d,null,2)],{type:"application/json"}));a.href=url;a.download="affiliate-agent-os-backup.json";a.click();setTimeout(()=>URL.revokeObjectURL(url),1000)};
 render();
+
+// AI Agent UI: calls the deployed Supabase Edge Function; endpoint is saved only on this device.
+const endpointInput=$("#endpoint"), agentForm=$("#af");
+if(endpointInput&&agentForm){
+ try{endpointInput.value=localStorage.agentos_endpoint||""}catch{}
+ endpointInput.addEventListener("change",()=>{try{localStorage.agentos_endpoint=endpointInput.value.trim()}catch{}});
+ agentForm.onsubmit=async e=>{
+  e.preventDefault();
+  const endpoint=endpointInput.value.trim(),status=$("#agentStatus"),output=$("#agentOutput"),button=$("#runAgent");
+  if(!/^https:\/\/[^\s]+\/functions\/v1\/agent-run(?:\?.*)?$/.test(endpoint)){
+   status.textContent="Masukkan URL lengkap Supabase Edge Function yang berakhir dengan /functions/v1/agent-run.";return;
+  }
+  try{localStorage.agentos_endpoint=endpoint}catch{}
+  button.disabled=true;status.textContent="AI sedang bekerja…";output.innerHTML="";
+  try{
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:$("#amode").value,niche:$("#niche").value.trim(),audience:$("#audience").value.trim()||"pembeli Indonesia",platform:$("#aplatform").value,product:$("#product").value.trim(),language:"Bahasa Indonesia"})});
+   const data=await response.json();
+   if(!response.ok||!data.ok)throw new Error(data.error||"Permintaan AI gagal.");
+   const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";
+   card.textContent=data.text;output.appendChild(card);
+   if(data.sources?.length){const h=document.createElement("h3");h.textContent="Sumber untuk diverifikasi";output.appendChild(h);const list=document.createElement("ul");data.sources.forEach(s=>{const li=document.createElement("li"),a=document.createElement("a");a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.title||s.url;li.appendChild(a);list.appendChild(li)});output.appendChild(list)}
+   const note=document.createElement("p");note.className="notice";note.textContent=data.notice||"Periksa hasil sebelum dipakai.";output.appendChild(note);
+   status.textContent="Selesai. Hasil AI sudah dibuat; belum ada video yang dirender atau konten yang diunggah.";
+  }catch(err){status.textContent="Belum berhasil: "+(err?.message||"periksa koneksi dan konfigurasi Supabase.");}
+  finally{button.disabled=false}
+ };
+}
