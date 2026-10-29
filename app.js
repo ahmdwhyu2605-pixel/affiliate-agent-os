@@ -46,7 +46,13 @@ if(endpointInput&&agentForm){
    card.textContent=data.text;output.appendChild(card);
    if(data.sources?.length){const h=document.createElement("h3");h.textContent="Sumber untuk diverifikasi";output.appendChild(h);const list=document.createElement("ul");data.sources.forEach(s=>{const li=document.createElement("li"),a=document.createElement("a");a.href=s.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=s.title||s.url;li.appendChild(a);list.appendChild(li)});output.appendChild(list)}
    const note=document.createElement("p");note.className="notice";note.textContent=data.notice||"Periksa hasil sebelum dipakai.";output.appendChild(note);
-   status.textContent="Selesai. Hasil AI sudah dibuat; belum ada video yang dirender atau konten yang diunggah.";
+   const actions=document.createElement("div");actions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0";
+   const saveButton=document.createElement("button");saveButton.type="button";saveButton.textContent="Simpan hasil ke Studio Konten";
+   saveButton.onclick=()=>{d.c.push({name:$("#product").value.trim()||$("#niche").value.trim()||"Hasil AI Agent",platform:$("#aplatform").value,text:data.text+"\\n\\nSumber: "+(data.sources||[]).map(s=>s.url).join("\\n")});save();saveButton.textContent="Tersimpan di Studio Konten";saveButton.disabled=true;};
+   const copyButton=document.createElement("button");copyButton.type="button";copyButton.textContent="Salin hasil AI";
+   copyButton.onclick=()=>{if(navigator.clipboard?.writeText)navigator.clipboard.writeText(data.text).then(()=>{copyButton.textContent="Tersalin"}).catch(()=>prompt("Salin hasil AI",data.text));else prompt("Salin hasil AI",data.text)};
+   actions.append(saveButton,copyButton);output.appendChild(actions);
+   status.textContent="Selesai. Hasil AI dibuat. Simpan ke Studio Konten agar tidak hilang saat halaman ditutup.";
   }catch(err){status.textContent="Belum berhasil: "+(err?.message||"periksa koneksi dan konfigurasi Supabase.");}
   finally{button.disabled=false}
  };
