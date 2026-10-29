@@ -48,7 +48,10 @@ Deno.serve(async (req: Request) => {
   const audience = String(body.audience ?? "pembeli Indonesia").trim().slice(0, 160);
   const platform = String(body.platform ?? "TikTok").trim().slice(0, 40);
   const language = String(body.language ?? "Bahasa Indonesia").trim().slice(0, 40);
-  const product = String(body.product ?? "").trim().slice(0, 240);\n  const productUrl = String(body.productUrl ?? "").trim().slice(0, 1200);\n  const videoStyle = String(body.videoStyle ?? "Review jujur").trim().slice(0, 80);\n  if (productUrl && !/^https?:\\/\\//i.test(productUrl)) return respond({ ok: false, error: "Link produk harus berupa URL http atau https." }, 400, origin);
+  const product = String(body.product ?? "").trim().slice(0, 240);
+  const productUrl = String(body.productUrl ?? "").trim().slice(0, 1200);
+  const videoStyle = String(body.videoStyle ?? "Review jujur").trim().slice(0, 80);
+  if (productUrl && !/^https?:\/\//i.test(productUrl)) return respond({ ok: false, error: "Link produk harus berupa URL http atau https." }, 400, origin);
   if (!["research", "plan", "video"].includes(mode)) return respond({ ok: false, error: "Mode tidak dikenal." }, 400, origin);
   if (!["TikTok", "Instagram Reels", "YouTube Shorts"].includes(platform)) return respond({ ok: false, error: "Platform tidak didukung." }, 400, origin);
   if (!niche && !product) return respond({ ok: false, error: "Isi niche atau nama produk terlebih dahulu." }, 400, origin);
