@@ -168,8 +168,9 @@ const videoForm=$("#vf");
 if(videoForm){
  videoForm.onsubmit=async e=>{
   e.preventDefault();
-  const url=$("#vurl").value.trim(),name=$("#vname").value.trim(),platform=$("#vplatform").value,style=$("#vstyle").value,audience=$("#vaudience").value.trim()||"pembeli Indonesia",duration=Number($("#vduration").value||30),goal=$("#vgoal").value,facts=$("#vfacts").value.trim(),tone=$("#vtone").value.trim()||"natural dan meyakinkan";
+  const url=$("#vurl").value.trim(),name=$("#vname").value.trim(),platform=$("#vplatform").value,style=$("#vstyle").value,audience=$("#vaudience").value.trim()||"pembeli Indonesia",duration=Number($("#vduration").value||30),goal=$("#vgoal").value,facts=$("#vfacts").value.trim(),tone=$("#vtone").value.trim()||"natural dan meyakinkan",count=Number($("#vcount").value||5),instruction=$("#vcommand").value.trim();
   const status=$("#vstatus"),output=$("#voutput"),button=$("#vsubmit");
+  const readImage=async(file)=>{if(!file)return null;if(!file.type.startsWith("image/"))throw new Error("File referensi harus berupa gambar.");const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca foto."));reader.readAsDataURL(file);});const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Foto tidak bisa dibuka."));image.src=dataUrl;});const scale=Math.min(1,900/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);return {mimeType:"image/jpeg",data:canvas.toDataURL("image/jpeg",0.72).split(",")[1]};};
   if(!/^https?:\/\//i.test(url)){status.textContent="Masukkan link produk yang valid.";return;}
   if(!name){status.textContent="Isi nama produk dulu.";return;}
   if(!cloudClient||!cloudUser){status.textContent="Login dulu supaya AI bisa digunakan.";return;}
@@ -178,14 +179,18 @@ if(videoForm){
    const {data:s,error:se}=await cloudClient.auth.getSession();if(se)throw se;
    const endpoint=localStorage.agentos_endpoint||"https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";
    const key=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
-   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+(s.session?.access_token||"")},body:JSON.stringify({mode:"video",niche:"affiliate marketing Indonesia",audience,platform,product:name,productUrl:url,videoStyle:style,videoDuration:duration,videoGoal:goal,productFacts:facts,voiceTone:tone,language:"Bahasa Indonesia"})});
+   status.textContent="AI sedang membaca referensi foto dan menyusun "+count+" konsep berbeda…";
+   const productFiles=Array.from($("#vproductImage").files||[]).slice(0,3),humanFile=$("#vhumanImage").files?.[0]||null;
+   const productImages=[];for(const file of productFiles)productImages.push(await readImage(file));
+   const humanImage=await readImage(humanFile);
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+(s.session?.access_token||"")},body:JSON.stringify({mode:"video",niche:"affiliate marketing Indonesia",audience,platform,product:name,productUrl:url,videoStyle:style,videoDuration:duration,videoGoal:goal,videoCount:count,productFacts:facts,voiceTone:tone,userInstruction:instruction,productImages,humanImage,language:"Bahasa Indonesia"})});
    const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||"Generate konten gagal.");
    const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";card.textContent=data.text;output.appendChild(card);
    const note=document.createElement("p");note.className="notice";note.textContent=data.notice||"Periksa fakta produk sebelum posting.";output.appendChild(note);
    const actions=document.createElement("div");actions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0";
    const copy=document.createElement("button");copy.type="button";copy.textContent="Salin paket konten";copy.onclick=()=>{if(navigator.clipboard?.writeText)navigator.clipboard.writeText(data.text).then(()=>copy.textContent="Tersalin").catch(()=>prompt("Salin paket konten",data.text));else prompt("Salin paket konten",data.text)};
    const saveDraft=document.createElement("button");saveDraft.type="button";saveDraft.textContent="Simpan ke Studio Konten";saveDraft.onclick=async()=>{const title=name+" — "+platform,draftText=data.text+"\n\nLink produk: "+url;d.c.push({name:title,platform,text:draftText});save();if(cloudClient&&cloudUser){try{const {error}=await cloudClient.from("content_drafts").insert({user_id:cloudUser.id,platform,title,hook:draftText.slice(0,240),script:draftText,caption:"Periksa klaim produk dan ungkapkan tautan affiliate.",hashtags:[],storyboard:[],status:"draft"});if(error)throw error;}catch(err){status.textContent="Draft tersimpan di workspace; tabel draft gagal: "+(err.message||"cek RLS");return;}}saveDraft.disabled=true;saveDraft.textContent="Tersimpan";};
-   actions.append(copy,saveDraft);output.appendChild(actions);status.textContent="Paket konten selesai untuk "+platform+".";
+   actions.append(copy,saveDraft);output.appendChild(actions);status.textContent="Paket "+count+" konsep skrip selesai untuk "+platform+". Render MP4 tiap konsep masih bergantung pada integrasi video yang tersedia.";
   }catch(err){status.textContent="Belum berhasil: "+(err.message||"cek koneksi dan konfigurasi AI.");}
   finally{button.disabled=false;}
  };
