@@ -263,7 +263,7 @@ if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
 const researchForm = $("#researchForm");
 if (researchForm) researchForm.addEventListener("submit", async e => {
  e.preventDefault();
- const keyword=$("#rkeyword").value.trim(), market=$("#rmarket").value, period=$("#rperiod").value;
+ const keyword=$("#rkeyword").value.trim(), productUrl=$("#rproductUrl").value.trim(), market=$("#rmarket").value, period=$("#rperiod").value;
  const price=$("#rprice").value.trim(), commission=$("#rcommission").value.trim(), notes=$("#rnotes").value.trim();
  const status=$("#researchStatus"), output=$("#researchOutput"), button=$("#researchButton");
  if(!keyword){status.textContent="Isi nama produk atau niche dulu.";return;}
@@ -274,7 +274,7 @@ if (researchForm) researchForm.addEventListener("submit", async e => {
   const endpoint=localStorage.agentos_endpoint||"https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";
   const key=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
   const researchBrief="Produk/niche: "+keyword+"; marketplace: "+market+"; periode fokus: "+period+" hari; harga target (user input): "+(price||"tidak diketahui")+"; komisi affiliate % (user input): "+(commission||"tidak diketahui")+"; catatan/data pengguna: "+(notes||"tidak ada")+". Analisis peluang produk Indonesia dengan sumber web terbaru. Wajib bedakan data marketplace terverifikasi, informasi publik, dan estimasi. Cari data penjualan/tren produk terlaris jika sumber publik menyediakannya; jika data resmi privat tidak bisa diakses, katakan terus terang dan jangan mengarang angka. Beri skor peluang 0-100 beserta confidence dan alasan, tren/musiman, permintaan, persaingan, kisaran harga bila bersumber, potensi komisi hanya jika terverifikasi, risiko, 3-5 produk/kata kunci pembanding, rencana uji konten 5 video, dan sumber URL dengan tanggal. Jangan menjamin penjualan.";
-  const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+(s.session?.access_token||"")},body:JSON.stringify({mode:"research",niche:researchBrief,audience:"pembeli Indonesia",platform:market,product:keyword,language:"Bahasa Indonesia"})});
+  const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+(s.session?.access_token||"")},body:JSON.stringify({mode:"research",niche:researchBrief,audience:"pembeli Indonesia",platform:market,product:keyword,productUrl,language:"Bahasa Indonesia"})});
   const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||"Riset gagal.");
   const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";card.textContent=data.text;output.appendChild(card);
   if(Array.isArray(data.sources)&&data.sources.length){const heading=document.createElement("h3");heading.textContent="Sumber yang ditemukan";output.appendChild(heading);const list=document.createElement("ul");for(const src of data.sources.slice(0,12)){const li=document.createElement("li"),a=document.createElement("a");a.href=src.url;a.target="_blank";a.rel="noopener noreferrer";a.textContent=src.title||src.url;li.appendChild(a);list.appendChild(li)}output.appendChild(list);}
