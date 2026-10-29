@@ -122,7 +122,7 @@ if(endpointInput&&agentForm){
   try{
    if(mode==="signup"){
     if(password.length<8)throw new Error("Password minimal 8 karakter.");
-    const {data,error}=await cloudClient.auth.signUp({email,password,options:{emailRedirectTo:location.origin+location.pathname}});
+    const {data,error}=await cloudClient.auth.signUp({email,password,options:{emailRedirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"}});
     if(error)throw error;
     if(data.session?.user){await attachAccount(data.session.user);}
     else authStatus.textContent="Akun dibuat. Cek email untuk verifikasi, lalu login.";
@@ -130,7 +130,7 @@ if(endpointInput&&agentForm){
     const {data,error}=await cloudClient.auth.signInWithPassword({email,password});if(error)throw error;
     if(!data.user)throw new Error("Login belum menghasilkan sesi.");await attachAccount(data.user);
    }else if(mode==="reset"){
-    const {error}=await cloudClient.auth.resetPasswordForEmail(email,{redirectTo:location.origin+location.pathname});if(error)throw error;
+    const {error}=await cloudClient.auth.resetPasswordForEmail(email,{redirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"});if(error)throw error;
     authStatus.textContent="Link reset password dikirim jika email terdaftar. Periksa inbox/spam.";
    }
   }catch(err){authStatus.textContent=err.message||"Autentikasi gagal.";}
