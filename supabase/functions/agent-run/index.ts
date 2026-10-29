@@ -28,7 +28,7 @@ Deno.serve(async (req: Request) => {
   const apiKey = Deno.env.get("GEMINI_API_KEY");
   if (!apiKey) return respond({ ok: false, configured: false, error: "GEMINI_API_KEY belum dipasang pada Supabase Edge Function Secrets." }, 503, origin);
   const supabaseUrl = "https://zcwiuvawmovkfbalgyyx.supabase.co";
-  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY");
+  const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
   const authorization = req.headers.get("authorization") || "";
   const bearer = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
   if (!publishableKey || !bearer || bearer === publishableKey) return respond({ ok: false, error: "Sesi pengguna tidak valid. Muat ulang aplikasi dan coba lagi." }, 401, origin);
