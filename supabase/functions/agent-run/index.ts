@@ -53,7 +53,7 @@ Deno.serve(async (req: Request) => {
   const videoStyle = String(body.videoStyle ?? "Review jujur").trim().slice(0, 80);
   if (productUrl && !/^https?:\/\//i.test(productUrl)) return respond({ ok: false, error: "Link produk harus berupa URL http atau https." }, 400, origin);
   if (!["research", "plan", "video"].includes(mode)) return respond({ ok: false, error: "Mode tidak dikenal." }, 400, origin);
-  if (!["TikTok", "Instagram Reels", "YouTube Shorts"].includes(platform)) return respond({ ok: false, error: "Platform tidak didukung." }, 400, origin);
+  if (!["TikTok", "Shopee Video", "Instagram Reels", "YouTube Shorts"].includes(platform)) return respond({ ok: false, error: "Platform tidak didukung." }, 400, origin);
   if (!niche && !product) return respond({ ok: false, error: "Isi niche atau nama produk terlebih dahulu." }, 400, origin);
   const prompt = mode === "research"
     ? `Riset awal affiliate Indonesia untuk niche ${niche}, audiens ${audience}. Gunakan Google Search grounding bila tersedia. Beri kandidat kategori produk, alasan, ide konten, query pencarian, sumber URL yang benar-benar ditemukan, dan hal yang wajib diverifikasi. Jangan mengarang harga, komisi, penjualan, atau tautan affiliate. Jawab dalam ${language}.`
