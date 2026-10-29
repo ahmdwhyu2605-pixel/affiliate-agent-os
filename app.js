@@ -54,7 +54,12 @@ if(endpointInput&&agentForm){
   try{localStorage.agentos_endpoint=endpoint;localStorage.agentos_anon_key=anonKey}catch{}
   button.disabled=true;status.textContent="AI sedang bekerja…";output.innerHTML="";
   try{
-   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey,"Authorization":"Bearer "+anonKey},body:JSON.stringify({mode:$("#amode").value,niche:$("#niche").value.trim(),audience:$("#audience").value.trim()||"pembeli Indonesia",platform:$("#aplatform").value,product:$("#product").value.trim(),language:"Bahasa Indonesia"})});
+   if(!cloudClient)throw new Error("Sesi cloud belum siap. Aktifkan Anonymous Sign-ins di Supabase Auth lalu muat ulang halaman.");
+   const {data:authData,error:authError}=await cloudClient.auth.getSession();
+   if(authError)throw authError;
+   const accessToken=authData.session?.access_token;
+   if(!accessToken)throw new Error("Sesi pengguna belum tersedia. Muat ulang halaman.");
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey,"Authorization":"Bearer "+accessToken},body:JSON.stringify({mode:$("#amode").value,niche:$("#niche").value.trim(),audience:$("#audience").value.trim()||"pembeli Indonesia",platform:$("#aplatform").value,product:$("#product").value.trim(),language:"Bahasa Indonesia"})});
    const data=await response.json();
    if(!response.ok||!data.ok)throw new Error(data.error||"Permintaan AI gagal.");
    const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";
