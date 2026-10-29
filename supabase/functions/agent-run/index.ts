@@ -72,7 +72,7 @@ Deno.serve(async (req: Request) => {
       const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/interactions", {
         method: "POST",
         headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-        body: JSON.stringify({ model: "gemini-omni-1.1-flash", input: [...productImages.map((image: { mimeType: string; data: string }) => ({ type: "image", data: image.data, mime_type: image.mimeType })), ...(humanImage ? [{ type: "image", data: humanImage.data, mime_type: humanImage.mimeType }] : []), { type: "text", text: visualPrompt }], response_format: { type: "video", aspect_ratio: "9:16" } }),
+        body: JSON.stringify({ model: "gemini-omni-1.1-flash", input: [...productImages.map((image: { mimeType: string; data: string }) => ({ type: "image", data: image.data, mime_type: image.mimeType })), ...(humanImage ? [{ type: "image", data: humanImage.data, mime_type: humanImage.mimeType }] : []), { type: "text", text: visualPrompt }], response_format: { type: "video", aspect_ratio: "9:16", delivery: "uri" } }),
         signal: AbortSignal.timeout(150000),
       });
       const raw = await upstream.json().catch(() => ({}));
@@ -81,12 +81,40 @@ Deno.serve(async (req: Request) => {
         const message = upstream.status === 429 ? "Kuota video AI habis atau limit tercapai. Cek kuota dan billing Google AI Studio." : upstream.status === 400 ? "Model video menolak permintaan. Coba prompt lebih sederhana atau periksa akses model." : upstream.status === 403 ? "Akses model video belum tersedia untuk API key ini atau billing belum aktif." : "Layanan render video AI gagal. Coba lagi nanti.";
         return respond({ ok: false, error: message }, upstream.status === 429 ? 429 : upstream.status === 400 ? 400 : upstream.status === 403 ? 403 : 502, origin);
       }
-      const stepContent = (raw?.steps ?? []).filter((step: { type?: string }) => step.type === "model_output").flatMap((step: { content?: Array<{ type?: string; data?: string; mime_type?: string }> }) => step.content ?? []);
-      const video = stepContent.find((part: { type?: string; data?: string; mime_type?: string }) => part.type === "video" && typeof part.data === "string");
+      const stepContent = (raw?.steps ?? []).filter((step: { type?: string }) => step.type === "model_output").flatMap((step: { content?: Array<{ type?: string; data?: string; mime_type?: string; uri?: string }> }) => step.content ?? []);
+      const video = stepContent.find((part: { type?: string; data?: string; mime_type?: string; uri?: string }) => part.type === "video" && (typeof part.data === "string" || typeof part.uri === "string"));
       const outputVideo = raw?.output_video;
-      const videoData = video?.data ?? outputVideo?.data;
+      let videoData: string | undefined = video?.data ?? outputVideo?.data;
       const mimeType = video?.mime_type ?? outputVideo?.mime_type ?? "video/mp4";
-      if (!videoData) return respond({ ok: false, error: "Model merespons tetapi file video tidak ditemukan. Coba ulangi; jika berulang, cek respons API video." }, 502, origin);
+      const videoUri: string | undefined = video?.uri ?? outputVideo?.uri;
+      if (!videoData && videoUri) {
+        const fileMatch = videoUri.match(/\/files\/([^/:?]+)/);
+        if (fileMatch) {
+          const fileId = fileMatch[1];
+          let active = false;
+          for (let attempt = 0; attempt < 18; attempt++) {
+            const fileInfoResponse = await fetch("https://generativelanguage.googleapis.com/v1beta/files/" + encodeURIComponent(fileId) + "?key=" + encodeURIComponent(apiKey), { signal: AbortSignal.timeout(8000) });
+            if (!fileInfoResponse.ok) break;
+            const fileInfo = await fileInfoResponse.json().catch(() => ({}));
+            const state = String(fileInfo?.state ?? "").toUpperCase();
+            if (state === "ACTIVE") { active = true; break; }
+            if (state === "FAILED") break;
+            await new Promise(resolve => setTimeout(resolve, 3000));
+          }
+          if (active) {
+            const downloadUrl = videoUri + (videoUri.includes("?") ? "&" : "?") + "key=" + encodeURIComponent(apiKey);
+            const downloadResponse = await fetch(downloadUrl, { signal: AbortSignal.timeout(20000) });
+            if (downloadResponse.ok) {
+              const bytes = new Uint8Array(await downloadResponse.arrayBuffer());
+              let binary = "";
+              const chunkSize = 0x8000;
+              for (let offset = 0; offset < bytes.length; offset += chunkSize) binary += String.fromCharCode(...bytes.subarray(offset, Math.min(offset + chunkSize, bytes.length)));
+              videoData = btoa(binary);
+            }
+          }
+        }
+      }
+      if (!videoData) return respond({ ok: false, error: "Model tidak mengembalikan video yang dapat diunduh. Coba ulangi; jika berulang, periksa status dan akses model video." }, 502, origin);
       return respond({ ok: true, mode: "render", model: "gemini-omni-1.1-flash", mimeType, videoBase64: videoData, generated_at: new Date().toISOString(), notice: "Video AI selesai dibuat. Tinjau hasil sebelum dipakai untuk promosi; model dapat membuat detail visual yang tidak persis sama dengan produk asli." }, 200, origin);
     } catch (error) {
       const message = error instanceof DOMException && error.name === "TimeoutError" ? "Render video memerlukan waktu terlalu lama. Coba lagi nanti; jangan kirim permintaan berulang-ulang." : "Gagal menghubungi model video AI. Periksa akses Gemini API dan billing.";
