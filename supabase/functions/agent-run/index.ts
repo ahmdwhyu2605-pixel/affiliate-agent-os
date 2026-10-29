@@ -32,9 +32,12 @@ Deno.serve(async (req: Request) => {
   const authorization = req.headers.get("authorization") || "";
   const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!publishableKey || !bearer || bearer === publishableKey) return respond({ ok: false, error: "Sesi pengguna tidak valid. Muat ulang aplikasi dan coba lagi." }, 401, origin);
+  let authenticatedUser: { id?: string };
   try {
     const authResponse = await fetch(supabaseUrl + "/auth/v1/user", { headers: { apikey: publishableKey, Authorization: "Bearer " + bearer }, signal: AbortSignal.timeout(8000) });
     if (!authResponse.ok) return respond({ ok: false, error: "Sesi pengguna kedaluwarsa. Muat ulang aplikasi dan coba lagi." }, 401, origin);
+    authenticatedUser = await authResponse.json();
+    if (!authenticatedUser.id) return respond({ ok: false, error: "Identitas pengguna tidak ditemukan." }, 401, origin);
   } catch { return respond({ ok: false, error: "Tidak dapat memverifikasi sesi pengguna." }, 502, origin); }
   const length = Number(req.headers.get("content-length") || 0);
   if (length > 12000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
@@ -72,7 +75,18 @@ Deno.serve(async (req: Request) => {
     const resultText = (candidate?.content?.parts ?? []).map((part: { text?: string }) => part.text ?? "").join("\n").trim();
     const sources = (candidate?.groundingMetadata?.groundingChunks ?? []).map((chunk: { web?: { uri?: string; title?: string } }) => chunk.web).filter((web: { uri?: string } | undefined) => typeof web?.uri === "string" && /^https?:\/\//.test(web.uri)).map((web: { uri: string; title?: string }) => ({ url: web.uri, title: web.title ?? web.uri }));
     if (!resultText) return respond({ ok: false, error: "AI tidak mengembalikan teks. Coba ubah permintaan." }, 502, origin);
-    return respond({ ok: true, configured: true, mode, text: resultText, sources, generated_at: new Date().toISOString(), notice: "Hasil AI perlu diverifikasi. Fungsi ini belum membuat tautan affiliate, merender video final, atau mengunggah konten." }, 200, origin);
+    const savedRun = await fetch(supabaseUrl + "/rest/v1/agent_runs", {
+      method: "POST",
+      headers: { apikey: publishableKey, Authorization: "Bearer " + bearer, "Content-Type": "application/json", Prefer: "return=minimal" },
+      body: JSON.stringify({ user_id: authenticatedUser.id, mode, niche: niche || null, audience, platform, product: product || null, request_json: { mode, niche, audience, platform, product, language }, result_text: resultText, sources, status: "completed", completed_at: new Date().toISOString() }),
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!savedRun.ok) {
+      const detail = await savedRun.text().catch(() => "");
+      console.error("Failed to save agent run", savedRun.status, detail.slice(0, 300));
+      return respond({ ok: false, error: "AI berhasil membuat hasil, tetapi gagal menyimpan riwayat ke database. Periksa kebijakan RLS agent_runs." }, 502, origin);
+    }
+    return respond({ ok: true, configured: true, mode, text: resultText, sources, generated_at: new Date().toISOString(), saved: true, notice: "Hasil AI dan riwayatnya tersimpan. Hasil tetap perlu diverifikasi; tautan affiliate, render video final, dan publikasi otomatis memerlukan integrasi tambahan." }, 200, origin);
   } catch (error) {
     const message = error instanceof DOMException && error.name === "TimeoutError" ? "Permintaan ke AI melewati batas waktu. Coba lagi." : "Gagal menghubungi layanan AI. Periksa konfigurasi lalu coba lagi.";
     return respond({ ok: false, error: message }, 502, origin);
