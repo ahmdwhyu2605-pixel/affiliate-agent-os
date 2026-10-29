@@ -25,20 +25,20 @@ $("#backup").onclick=()=>{const a=document.createElement("a"),url=URL.createObje
 render();
 
 // AI Agent UI: calls the deployed Supabase Edge Function; endpoint is saved only on this device.
-const endpointInput=$("#endpoint"), agentForm=$("#af");
+const endpointInput=$("#endpoint"), anonInput=$("#anonKey"), agentForm=$("#af");
 if(endpointInput&&agentForm){
- try{endpointInput.value=localStorage.agentos_endpoint||""}catch{}
- endpointInput.addEventListener("change",()=>{try{localStorage.agentos_endpoint=endpointInput.value.trim()}catch{}});
+ try{endpointInput.value=localStorage.agentos_endpoint||"";anonInput.value=localStorage.agentos_anon_key||""}catch{}
+ endpointInput.addEventListener("change",()=>{try{localStorage.agentos_endpoint=endpointInput.value.trim()}catch{}});\n anonInput.addEventListener("change",()=>{try{localStorage.agentos_anon_key=anonInput.value.trim()}catch{}});
  agentForm.onsubmit=async e=>{
   e.preventDefault();
-  const endpoint=endpointInput.value.trim(),status=$("#agentStatus"),output=$("#agentOutput"),button=$("#runAgent");
+  const endpoint=endpointInput.value.trim(),anonKey=anonInput.value.trim(),status=$("#agentStatus"),output=$("#agentOutput"),button=$("#runAgent");
   if(!/^https:\/\/[^\s]+\/functions\/v1\/agent-run(?:\?.*)?$/.test(endpoint)){
    status.textContent="Masukkan URL lengkap Supabase Edge Function yang berakhir dengan /functions/v1/agent-run.";return;
   }
-  try{localStorage.agentos_endpoint=endpoint}catch{}
+  try{localStorage.agentos_endpoint=endpoint;localStorage.agentos_anon_key=anonKey}catch{}
   button.disabled=true;status.textContent="AI sedang bekerja…";output.innerHTML="";
   try{
-   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json"},body:JSON.stringify({mode:$("#amode").value,niche:$("#niche").value.trim(),audience:$("#audience").value.trim()||"pembeli Indonesia",platform:$("#aplatform").value,product:$("#product").value.trim(),language:"Bahasa Indonesia"})});
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey,"Authorization":"Bearer "+anonKey},body:JSON.stringify({mode:$("#amode").value,niche:$("#niche").value.trim(),audience:$("#audience").value.trim()||"pembeli Indonesia",platform:$("#aplatform").value,product:$("#product").value.trim(),language:"Bahasa Indonesia"})});
    const data=await response.json();
    if(!response.ok||!data.ok)throw new Error(data.error||"Permintaan AI gagal.");
    const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";
