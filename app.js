@@ -162,3 +162,30 @@ if(endpointInput&&agentForm){
  });
 
 })();
+
+// Generate Video AI from a product/affiliate URL. Produces a production package, not a rendered MP4.
+const videoForm=$("#vf");
+if(videoForm){
+ videoForm.onsubmit=async e=>{
+  e.preventDefault();
+  const url=$("#vurl").value.trim(),name=$("#vname").value.trim(),platform=$("#vplatform").value,style=$("#vstyle").value,audience=$("#vaudience").value.trim()||"pembeli Indonesia";
+  const status=$("#vstatus"),output=$("#voutput"),button=$("#vsubmit");
+  if(!/^https?:\/\//i.test(url)){status.textContent="Masukkan link produk yang valid.";return;}
+  if(!cloudClient||!cloudUser){status.textContent="Login dulu agar AI bisa dijalankan dan riwayat tersimpan.";return;}
+  button.disabled=true;status.textContent="AI sedang menyusun video dari link produk…";output.innerHTML="";
+  try{
+   const {data:sessionData,error:sessionError}=await cloudClient.auth.getSession();if(sessionError)throw sessionError;
+   const endpoint=localStorage.agentos_endpoint||"https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";
+   const anonKey=localStorage.agentos_anon_key||"sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
+   const response=await fetch(endpoint,{method:"POST",headers:{"Content-Type":"application/json","apikey":anonKey,"Authorization":"Bearer "+(sessionData.session?.access_token||"")},body:JSON.stringify({mode:"video",niche:"affiliate produk",audience,platform,product:name||"Produk dari link yang diberikan",productUrl:url,videoStyle:style,language:"Bahasa Indonesia"})});
+   const data=await response.json();if(!response.ok||!data.ok)throw new Error(data.error||"Generate video gagal.");
+   const card=document.createElement("article");card.style.cssText="white-space:pre-wrap;background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:16px;margin:12px 0";card.textContent=data.text;output.appendChild(card);
+   const note=document.createElement("p");note.className="notice";note.textContent=data.notice||"Periksa klaim produk sebelum digunakan.";output.appendChild(note);
+   const actions=document.createElement("div");actions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0";
+   const copy=document.createElement("button");copy.type="button";copy.textContent="Salin paket video";copy.onclick=()=>{if(navigator.clipboard?.writeText)navigator.clipboard.writeText(data.text).then(()=>copy.textContent="Tersalin").catch(()=>prompt("Salin paket video",data.text));else prompt("Salin paket video",data.text)};
+   const saveDraft=document.createElement("button");saveDraft.type="button";saveDraft.className="secondary";saveDraft.textContent="Simpan ke Studio Konten";saveDraft.onclick=async()=>{const title=name||"Video affiliate";d.c.push({name:title,platform,text:data.text+"\n\nLink produk: "+url});save();if(cloudClient&&cloudUser){try{const {error}=await cloudClient.from("content_drafts").insert({user_id:cloudUser.id,platform,title,hook:data.text.slice(0,240),script:data.text+"\n\nLink produk: "+url,caption:"Periksa klaim dan ungkapkan tautan affiliate.",hashtags:[],storyboard:[],status:"draft"});if(error)throw error;}catch(err){status.textContent="Tersimpan di workspace lokal; sinkronisasi tabel draft gagal: "+(err.message||"cek RLS");return;}}saveDraft.disabled=true;saveDraft.textContent="Tersimpan";};
+   actions.append(copy,saveDraft);output.appendChild(actions);status.textContent="Paket video selesai dibuat. AI tidak membuat file MP4 final.";
+  }catch(err){status.textContent="Belum berhasil: "+(err.message||"cek koneksi atau konfigurasi AI.");}
+  finally{button.disabled=false;}
+ };
+}
