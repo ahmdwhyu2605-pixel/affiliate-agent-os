@@ -48,14 +48,14 @@ Deno.serve(async (req: Request) => {
   const audience = String(body.audience ?? "pembeli Indonesia").trim().slice(0, 160);
   const platform = String(body.platform ?? "TikTok").trim().slice(0, 40);
   const language = String(body.language ?? "Bahasa Indonesia").trim().slice(0, 40);
-  const product = String(body.product ?? "").trim().slice(0, 240);
+  const product = String(body.product ?? "").trim().slice(0, 240);\n  const productUrl = String(body.productUrl ?? "").trim().slice(0, 1200);\n  const videoStyle = String(body.videoStyle ?? "Review jujur").trim().slice(0, 80);\n  if (productUrl && !/^https?:\\/\\//i.test(productUrl)) return respond({ ok: false, error: "Link produk harus berupa URL http atau https." }, 400, origin);
   if (!["research", "plan", "video"].includes(mode)) return respond({ ok: false, error: "Mode tidak dikenal." }, 400, origin);
   if (!["TikTok", "Instagram Reels", "YouTube Shorts"].includes(platform)) return respond({ ok: false, error: "Platform tidak didukung." }, 400, origin);
   if (!niche && !product) return respond({ ok: false, error: "Isi niche atau nama produk terlebih dahulu." }, 400, origin);
   const prompt = mode === "research"
     ? `Riset awal affiliate Indonesia untuk niche ${niche}, audiens ${audience}. Gunakan Google Search grounding bila tersedia. Beri kandidat kategori produk, alasan, ide konten, query pencarian, sumber URL yang benar-benar ditemukan, dan hal yang wajib diverifikasi. Jangan mengarang harga, komisi, penjualan, atau tautan affiliate. Jawab dalam ${language}.`
     : mode === "video"
-    ? `Buat paket konsep video affiliate pendek untuk ${platform}. Niche ${niche || "sesuai produk"}; audiens ${audience}; produk ${product || "belum ditentukan"}. Jawab dalam ${language}: judul, hook 0-3 detik, storyboard tiap adegan dan durasi, narasi, subtitle, CTA, caption, 5 hashtag, dan daftar aset yang perlu dibuat. Jangan mengarang fitur/harga/hasil produk. Tandai klaim yang harus diverifikasi. Jangan mengaku video telah dirender atau diunggah.`
+    ? `Buat paket konsep video affiliate pendek untuk ${platform}. Niche ${niche || "sesuai produk"}; audiens ${audience}; produk ${product || "belum ditentukan"}; link produk: ${productUrl || "tidak diberikan"}; gaya: ${videoStyle}. Gunakan URL sebagai referensi yang diberikan pengguna, tetapi jangan mengaku telah membuka atau membaca halaman jika isi halaman tidak tersedia. Jangan menebak fitur, harga, rating, diskon, atau hasil produk hanya dari URL. Jika informasi produk tidak tersedia, tandai bagian yang perlu diisi/verifikasi. Jawab dalam ${language}: judul, hook 0-3 detik, storyboard adegan per adegan untuk video vertikal 9:16 berdurasi 20-30 detik, narasi, subtitle layar, arahan visual, CTA yang merujuk ke link produk, caption, 5 hashtag, dan daftar aset yang perlu dibuat. Jangan mengaku video telah dirender atau diunggah.`
     : `Buat rencana affiliate 7 hari untuk niche ${niche || product}, audiens ${audience}, platform ${platform}, produk ${product || "belum dipilih"}. Jawab dalam ${language}: prioritas riset, kriteria skor produk, 3 konsep konten, jadwal eksperimen 7 hari, metrik evaluasi, dan hal yang perlu diverifikasi. Jangan mengarang data pasar, komisi, atau penjualan.`;
   try {
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
@@ -78,7 +78,7 @@ Deno.serve(async (req: Request) => {
     const savedRun = await fetch(supabaseUrl + "/rest/v1/agent_runs", {
       method: "POST",
       headers: { apikey: publishableKey, Authorization: "Bearer " + bearer, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ user_id: authenticatedUser.id, mode, niche: niche || null, audience, platform, product: product || null, request_json: { mode, niche, audience, platform, product, language }, result_text: resultText, sources, status: "completed", completed_at: new Date().toISOString() }),
+      body: JSON.stringify({ user_id: authenticatedUser.id, mode, niche: niche || null, audience, platform, product: product || null, request_json: { mode, niche, audience, platform, product, productUrl, videoStyle, language }, result_text: resultText, sources, status: "completed", completed_at: new Date().toISOString() }),
       signal: AbortSignal.timeout(8000),
     });
     if (!savedRun.ok) {
