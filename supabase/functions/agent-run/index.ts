@@ -51,6 +51,10 @@ Deno.serve(async (req: Request) => {
   const product = String(body.product ?? "").trim().slice(0, 240);
   const productUrl = String(body.productUrl ?? "").trim().slice(0, 1200);
   const videoStyle = String(body.videoStyle ?? "Review jujur").trim().slice(0, 80);
+  const videoDuration = Math.max(15, Math.min(60, Number(body.videoDuration ?? 30) || 30));
+  const videoGoal = String(body.videoGoal ?? "klik produk").trim().slice(0, 80);
+  const productFacts = String(body.productFacts ?? "").trim().slice(0, 2500);
+  const voiceTone = String(body.voiceTone ?? "natural dan meyakinkan").trim().slice(0, 160);
   if (productUrl && !/^https?:\/\//i.test(productUrl)) return respond({ ok: false, error: "Link produk harus berupa URL http atau https." }, 400, origin);
   if (!["research", "plan", "video"].includes(mode)) return respond({ ok: false, error: "Mode tidak dikenal." }, 400, origin);
   if (!["TikTok", "Shopee Video", "Instagram Reels", "YouTube Shorts"].includes(platform)) return respond({ ok: false, error: "Platform tidak didukung." }, 400, origin);
@@ -58,13 +62,13 @@ Deno.serve(async (req: Request) => {
   const prompt = mode === "research"
     ? `Riset awal affiliate Indonesia untuk niche ${niche}, audiens ${audience}. Gunakan Google Search grounding bila tersedia. Beri kandidat kategori produk, alasan, ide konten, query pencarian, sumber URL yang benar-benar ditemukan, dan hal yang wajib diverifikasi. Jangan mengarang harga, komisi, penjualan, atau tautan affiliate. Jawab dalam ${language}.`
     : mode === "video"
-    ? `Buat paket konsep video affiliate pendek untuk ${platform}. Niche ${niche || "sesuai produk"}; audiens ${audience}; produk ${product || "belum ditentukan"}; link produk: ${productUrl || "tidak diberikan"}; gaya: ${videoStyle}. Gunakan URL sebagai referensi yang diberikan pengguna, tetapi jangan mengaku telah membuka atau membaca halaman jika isi halaman tidak tersedia. Jangan menebak fitur, harga, rating, diskon, atau hasil produk hanya dari URL. Jika informasi produk tidak tersedia, tandai bagian yang perlu diisi/verifikasi. Jawab dalam ${language}: judul, hook 0-3 detik, storyboard adegan per adegan untuk video vertikal 9:16 berdurasi 20-30 detik, narasi, subtitle layar, arahan visual, CTA yang merujuk ke link produk, caption, 5 hashtag, dan daftar aset yang perlu dibuat. Jangan mengaku video telah dirender atau diunggah.`
+    ? `Buat paket konten affiliate siap produksi untuk ${platform}. Produk ${product}; link ${productUrl || "tidak diberikan"}; target ${audience}; gaya ${videoStyle}; durasi ${videoDuration} detik; tujuan ${videoGoal}; gaya suara ${voiceTone}; fakta produk ${productFacts || "belum diberikan"}. Jangan mengaku telah membaca halaman produk jika isi tidak tersedia. Jangan mengarang harga, rating, fitur, testimoni, atau hasil. Tandai yang perlu diverifikasi dengan [CEK FAKTA]. Jawab dalam ${language}: konsep kreatif; 3 hook; skrip voice-over kata demi kata dengan timestamp; storyboard per adegan (durasi, visual, kamera, teks layar, VO, transisi/SFX); panduan edit vertikal 9:16; prompt AI visual untuk tiap adegan dengan produk konsisten; subtitle siap tempel; caption; 5-8 hashtag; CTA jujur. Sesuaikan platform: TikTok hook cepat; Shopee Video demo produk dan CTA ke produk; Instagram Reels visual rapi; YouTube Shorts retensi dan payoff. Jangan menjanjikan viral atau mengaku MP4 sudah dibuat.`
     : `Buat rencana affiliate 7 hari untuk niche ${niche || product}, audiens ${audience}, platform ${platform}, produk ${product || "belum dipilih"}. Jawab dalam ${language}: prioritas riset, kriteria skor produk, 3 konsep konten, jadwal eksperimen 7 hari, metrik evaluasi, dan hal yang perlu diverifikasi. Jangan mengarang data pasar, komisi, atau penjualan.`;
   try {
     const upstream = await fetch("https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent", {
       method: "POST",
       headers: { "Content-Type": "application/json", "x-goog-api-key": apiKey },
-      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], ...(mode === "research" ? { tools: [{ google_search: {} }] } : {}), generationConfig: { temperature: 0.45, maxOutputTokens: 3000 } }),
+      body: JSON.stringify({ contents: [{ role: "user", parts: [{ text: prompt }] }], ...(mode === "research" ? { tools: [{ google_search: {} }] } : {}), generationConfig: { temperature: 0.45, maxOutputTokens: mode === "video" ? 6000 : 3000 } }),
       signal: AbortSignal.timeout(25000),
     });
     const raw = await upstream.json().catch(() => ({}));
@@ -81,7 +85,7 @@ Deno.serve(async (req: Request) => {
     const savedRun = await fetch(supabaseUrl + "/rest/v1/agent_runs", {
       method: "POST",
       headers: { apikey: publishableKey, Authorization: "Bearer " + bearer, "Content-Type": "application/json", Prefer: "return=minimal" },
-      body: JSON.stringify({ user_id: authenticatedUser.id, mode, niche: niche || null, audience, platform, product: product || null, request_json: { mode, niche, audience, platform, product, productUrl, videoStyle, language }, result_text: resultText, sources, status: "completed", completed_at: new Date().toISOString() }),
+      body: JSON.stringify({ user_id: authenticatedUser.id, mode, niche: niche || null, audience, platform, product: product || null, request_json: { mode, niche, audience, platform, product, productUrl, videoStyle, videoDuration, videoGoal, productFacts, voiceTone, language }, result_text: resultText, sources, status: "completed", completed_at: new Date().toISOString() }),
       signal: AbortSignal.timeout(8000),
     });
     if (!savedRun.ok) {
