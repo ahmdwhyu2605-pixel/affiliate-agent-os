@@ -2,8 +2,6 @@ import "jsr:@supabase/functions-js/edge-runtime.d.ts";
 
 const allowedOrigins = new Set([
   "https://ahmdwhyu2605-pixel.github.io",
-  "http://localhost:3000",
-  "http://127.0.0.1:5500",
 ]);
 
 function corsHeaders(origin: string | null) {
@@ -39,10 +37,11 @@ Deno.serve(async (req: Request) => {
     authenticatedUser = await authResponse.json();
     if (!authenticatedUser.id) return respond({ ok: false, error: "Identitas pengguna tidak ditemukan." }, 401, origin);
   } catch { return respond({ ok: false, error: "Tidak dapat memverifikasi sesi pengguna." }, 502, origin); }
-  const length = Number(req.headers.get("content-length") || 0);
-  if (length > 12000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
+  let rawBody: string;
+  try { rawBody = await req.text(); } catch { return respond({ ok: false, error: "Body permintaan tidak dapat dibaca." }, 400, origin); }
+  if (new TextEncoder().encode(rawBody).byteLength > 12000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
   let body: Record<string, unknown>;
-  try { body = await req.json(); } catch { return respond({ ok: false, error: "Body harus berupa JSON yang valid." }, 400, origin); }
+  try { body = JSON.parse(rawBody); } catch { return respond({ ok: false, error: "Body harus berupa JSON yang valid." }, 400, origin); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return respond({ ok: false, error: "Format permintaan tidak valid." }, 400, origin);
   const mode = String(body.mode ?? "plan");
   const niche = String(body.niche ?? "").trim().slice(0, 160);
@@ -68,8 +67,9 @@ Deno.serve(async (req: Request) => {
     const raw = await upstream.json().catch(() => ({}));
     if (!upstream.ok) {
       const providerStatus = upstream.status;
-      const message = typeof raw?.error?.message === "string" ? raw.error.message : "Layanan AI mengembalikan error.";
-      return respond({ ok: false, error: message, provider_status: providerStatus }, providerStatus === 429 ? 429 : providerStatus === 400 ? 400 : 502, origin);
+      console.error("Gemini request failed", providerStatus);
+      const message = providerStatus === 429 ? "Batas penggunaan AI tercapai. Tunggu sebentar lalu coba lagi." : providerStatus === 400 ? "Permintaan AI ditolak. Periksa input dan konfigurasi model." : "Layanan AI sedang bermasalah. Coba lagi nanti.";
+      return respond({ ok: false, error: message }, providerStatus === 429 ? 429 : providerStatus === 400 ? 400 : 502, origin);
     }
     const candidate = raw?.candidates?.[0];
     const resultText = (candidate?.content?.parts ?? []).map((part: { text?: string }) => part.text ?? "").join("\n").trim();
