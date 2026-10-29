@@ -39,7 +39,7 @@ Deno.serve(async (req: Request) => {
   } catch { return respond({ ok: false, error: "Tidak dapat memverifikasi sesi pengguna." }, 502, origin); }
   let rawBody: string;
   try { rawBody = await req.text(); } catch { return respond({ ok: false, error: "Body permintaan tidak dapat dibaca." }, 400, origin); }
-  if (new TextEncoder().encode(rawBody).byteLength > 1500000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
+  if (new TextEncoder().encode(rawBody).byteLength > 3200000) return respond({ ok: false, error: "Permintaan terlalu besar." }, 413, origin);
   let body: Record<string, unknown>;
   try { body = JSON.parse(rawBody); } catch { return respond({ ok: false, error: "Body harus berupa JSON yang valid." }, 400, origin); }
   if (!body || typeof body !== "object" || Array.isArray(body)) return respond({ ok: false, error: "Format permintaan tidak valid." }, 400, origin);
