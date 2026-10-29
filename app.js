@@ -68,7 +68,7 @@ if(endpointInput&&agentForm){
    const note=document.createElement("p");note.className="notice";note.textContent=data.notice||"Periksa hasil sebelum dipakai.";output.appendChild(note);
    const actions=document.createElement("div");actions.style.cssText="display:flex;gap:8px;flex-wrap:wrap;margin:12px 0";
    const saveButton=document.createElement("button");saveButton.type="button";saveButton.textContent="Simpan hasil ke Studio Konten";
-   saveButton.onclick=()=>{d.c.push({name:$("#product").value.trim()||$("#niche").value.trim()||"Hasil AI Agent",platform:$("#aplatform").value,text:data.text+"\\n\\nSumber: "+(data.sources||[]).map(s=>s.url).join("\\n")});save();saveButton.textContent="Tersimpan di Studio Konten";saveButton.disabled=true;};
+   saveButton.onclick=()=>{d.c.push({name:$("#product").value.trim()||$("#niche").value.trim()||"Hasil AI Agent",platform:$("#aplatform").value,text:data.text+"\n\nSumber: "+(data.sources||[]).map(s=>s.url).join("\n")});save();saveButton.textContent="Tersimpan di Studio Konten";saveButton.disabled=true;};
    const copyButton=document.createElement("button");copyButton.type="button";copyButton.textContent="Salin hasil AI";
    copyButton.onclick=()=>{if(navigator.clipboard?.writeText)navigator.clipboard.writeText(data.text).then(()=>{copyButton.textContent="Tersalin"}).catch(()=>prompt("Salin hasil AI",data.text));else prompt("Salin hasil AI",data.text)};
    actions.append(saveButton,copyButton);output.appendChild(actions);
