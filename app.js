@@ -197,41 +197,58 @@ if(videoForm){
 }
 
 
-// AI video render: Gemini Omni Flash, API key stays server-side.
+// AI video render: render a separate MP4 for each selected concept.
 const renderVideoButton = document.querySelector("#renderVideoBtn");
 if (renderVideoButton) renderVideoButton.addEventListener("click", async () => {
  const status = document.querySelector("#renderStatus"), output = document.querySelector("#renderOutput");
  const endpoint = localStorage.agentos_endpoint || "https://zcwiuvawmovkfbalgyyx.supabase.co/functions/v1/agent-run";
  const key = localStorage.agentos_anon_key || "sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
  const name = document.querySelector("#vname").value.trim(), url = document.querySelector("#vurl").value.trim();
+ const count = Math.max(1, Math.min(10, Number(document.querySelector("#vcount").value || 1)));
  if (!name || !/^https?:\/\//i.test(url)) { status.textContent = "Isi nama produk dan link produk yang valid dulu."; return; }
  if (!cloudClient || !cloudUser) { status.textContent = "Login dulu untuk membuat video AI."; return; }
  const {data: sessionData, error: sessionError} = await cloudClient.auth.getSession();
  if (sessionError || !sessionData.session?.access_token) { status.textContent = "Sesi login tidak tersedia. Login ulang."; return; }
- if (!confirm("Render video AI dapat memakai kuota berbayar Google. Lanjutkan?")) return;
- renderVideoButton.disabled = true; status.textContent = "Merender video AI; proses dapat memakan waktu beberapa menit."; output.replaceChildren();
+ if (!confirm("Akan merender " + count + " video MP4 terpisah. Proses ini dapat memakai kuota/billing Google AI. Lanjutkan?")) return;
+ renderVideoButton.disabled = true; output.replaceChildren();
+ let completed = 0;
  try {
-  const readRenderImage=async(file)=>{if(!file)return null;if(!file.type.startsWith("image/"))throw new Error("File referensi harus berupa gambar.");const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca foto."));reader.readAsDataURL(file);});const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Foto tidak bisa dibuka."));image.src=dataUrl;});const scale=Math.min(1,900/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));canvas.getContext("2d").drawImage(img,0,0,canvas.width,canvas.height);return {mimeType:"image/jpeg",data:canvas.toDataURL("image/jpeg",0.72).split(",")[1]};};
+  const readRenderImage=async(file)=>{if(!file)return null;if(!file.type.startsWith("image/"))throw new Error("File referensi harus berupa gambar.");const dataUrl=await new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(reader.result);reader.onerror=()=>reject(new Error("Gagal membaca foto."));reader.readAsDataURL(file);});const img=await new Promise((resolve,reject)=>{const image=new Image();image.onload=()=>resolve(image);image.onerror=()=>reject(new Error("Foto tidak bisa dibuka."));image.src=dataUrl;});const scale=Math.min(1,900/Math.max(img.width,img.height));const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(img.width*scale));canvas.height=Math.max(1,Math.round(img.height*scale));const ctx=canvas.getContext("2d");if(!ctx)throw new Error("Tidak bisa memproses foto.");ctx.drawImage(img,0,0,canvas.width,canvas.height);return {mimeType:"image/jpeg",data:canvas.toDataURL("image/jpeg",0.72).split(",")[1]};};
   const productImages=[];for(const file of Array.from(document.querySelector("#vproductImage").files||[]).slice(0,3))productImages.push(await readRenderImage(file));
   const humanImage=await readRenderImage(document.querySelector("#vhumanImage").files?.[0]||null);
-  const response = await fetch(endpoint, {method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+sessionData.session.access_token},body:JSON.stringify({
-   mode:"render",niche:"affiliate marketing Indonesia",audience:document.querySelector("#vaudience").value.trim()||"pembeli Indonesia",
-   platform:document.querySelector("#vplatform").value,product:name,productUrl:url,videoStyle:document.querySelector("#vstyle").value,
-   videoDuration:Number(document.querySelector("#vduration").value||30),videoGoal:document.querySelector("#vgoal").value,
-   productFacts:document.querySelector("#vfacts").value.trim(),voiceTone:document.querySelector("#vtone").value.trim()||"natural dan meyakinkan",
-   renderPrompt:document.querySelector("#vprompt").value.trim(),productImages,humanImage,language:"Bahasa Indonesia"
-  })});
-  const data = await response.json(); if (!response.ok || !data.ok) throw new Error(data.error || "Render video gagal.");
-  const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
-  for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
-  const objectUrl = URL.createObjectURL(new Blob([bytes],{type:data.mimeType||"video/mp4"}));
-  const video=document.createElement("video"); video.controls=true; video.playsInline=true; video.src=objectUrl;
-  video.style.cssText="display:block;width:100%;max-width:420px;border-radius:14px;margin:12px 0;background:#000";
-  const link=document.createElement("a"); link.href=objectUrl; link.download=name.toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-affiliate-ai.mp4"; link.textContent="Simpan MP4 ke HP";
-  output.append(video,link); const note=document.createElement("p"); note.className="notice"; note.textContent=data.notice||"Tinjau video sebelum dipublikasikan."; output.append(note);
-  status.textContent="Video AI berhasil dibuat. Putar lalu simpan MP4 ke HP.";
- } catch(err) { status.textContent="Render belum berhasil: "+(err?.message||"periksa akses model, kuota, dan billing Gemini."); }
- finally { renderVideoButton.disabled=false; }
+  const fullScript = document.querySelector("#voutput").textContent || "";
+  const headings = [...fullScript.matchAll(/(?:KONSEP|VIDEO)\s*#?\s*(\d+)/gi)];
+  const basePrompt = document.querySelector("#vprompt").value.trim();
+  const styles = ["problem-solusi dengan hook visual kuat","demo penggunaan produk dengan close-up detail","storytelling situasi sehari-hari","3 manfaat yang terlihat lewat aksi visual","menjawab keraguan pembeli secara jujur","perbandingan before-after tanpa klaim berlebihan","unboxing dan detail bahan/fitur yang tampak","POV pengguna dalam rutinitas harian","visual sinematik dengan demonstrasi sederhana","ringkasan fitur dan CTA halus"];
+  for(let index=1; index<=count; index++){
+   status.textContent = "Merender video " + index + "/" + count + "… Video yang sudah selesai tetap tersedia jika proses berikutnya gagal.";
+   let conceptText = "";
+   if(headings.length){
+    const heading = headings.findIndex(h=>Number(h[1])===index);
+    if(heading>=0){const from=headings[heading].index;const to=headings[heading+1]?.index??fullScript.length;conceptText=fullScript.slice(from,to).trim();}
+   }
+   const variation = "Video terpisah nomor " + index + " dari " + count + ". Gunakan angle kreatif: " + styles[(index-1)%styles.length] + ". Buat urutan visual dan framing yang berbeda dari video lain. Konsep skrip terkait: " + (conceptText || "buat konsep visual orisinal untuk produk ini") + ". Arahan tambahan: " + basePrompt;
+   const response = await fetch(endpoint, {method:"POST",headers:{"Content-Type":"application/json","apikey":key,"Authorization":"Bearer "+sessionData.session.access_token},body:JSON.stringify({
+    mode:"render",niche:"affiliate marketing Indonesia",audience:document.querySelector("#vaudience").value.trim()||"pembeli Indonesia",
+    platform:document.querySelector("#vplatform").value,product:name,productUrl:url,videoStyle:document.querySelector("#vstyle").value,
+    videoDuration:Number(document.querySelector("#vduration").value||30),videoGoal:document.querySelector("#vgoal").value,
+    productFacts:document.querySelector("#vfacts").value.trim(),voiceTone:document.querySelector("#vtone").value.trim()||"natural dan meyakinkan",
+    renderPrompt:variation,productImages,humanImage,language:"Bahasa Indonesia"
+   })});
+   const data = await response.json(); if (!response.ok || !data.ok) throw new Error("Video " + index + ": " + (data.error || "Render gagal."));
+   const raw = atob(data.videoBase64), bytes = new Uint8Array(raw.length);
+   for (let i=0;i<raw.length;i++) bytes[i]=raw.charCodeAt(i);
+   const objectUrl = URL.createObjectURL(new Blob([bytes],{type:data.mimeType||"video/mp4"}));
+   const card=document.createElement("article");card.style.cssText="background:#14182d;border:1px solid #2c3150;border-radius:13px;padding:12px;margin:12px 0";
+   const heading=document.createElement("h3");heading.textContent="Video "+index+" dari "+count;
+   const video=document.createElement("video");video.controls=true;video.playsInline=true;video.src=objectUrl;video.style.cssText="display:block;width:100%;max-width:420px;border-radius:14px;margin:12px 0;background:#000";
+   const link=document.createElement("a");link.href=objectUrl;link.download=name.toLowerCase().replace(/[^a-z0-9]+/g,"-")+"-video-"+index+".mp4";link.textContent="Simpan MP4 "+index+" ke HP";
+   card.append(heading,video,link);output.appendChild(card);completed++;
+  }
+  status.textContent = completed + "/" + count + " video MP4 berhasil dibuat. Simpan tiap file ke HP dan periksa akurasi produk sebelum dipublikasikan.";
+ } catch(err) {
+  status.textContent = completed + "/" + count + " video berhasil dibuat. Proses berhenti: " + (err?.message||"periksa akses model, kuota, dan billing Gemini.") + (completed ? " Video yang sudah selesai tetap bisa disimpan." : "");
+ } finally { renderVideoButton.disabled=false; }
 });
 
 
