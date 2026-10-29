@@ -139,6 +139,13 @@ if(endpointInput&&agentForm){
  $("#authLogin")?.addEventListener("click",()=>loginAction("login"));
  $("#authSignup")?.addEventListener("click",()=>loginAction("signup"));
  $("#authReset")?.addEventListener("click",()=>loginAction("reset"));
+ $("#authResend")?.addEventListener("click",async()=>{
+  const email=$("#authEmail").value.trim();
+  if(!email){authStatus.textContent="Masukkan email akun dulu.";return;}
+  authStatus.textContent="Meminta email verifikasi ulang…";
+  try{const {error}=await cloudClient.auth.resend({type:"signup",email,options:{emailRedirectTo:"https://ahmdwhyu2605-pixel.github.io/affiliate-agent-os/"}});if(error)throw error;authStatus.textContent="Permintaan diproses. Periksa inbox, spam, dan Promotions. Jika akun sudah terverifikasi, langsung login.";}
+  catch(err){authStatus.textContent="Email verifikasi belum bisa dikirim: "+(err.message||"cek batas pengiriman email Supabase.");}
+ });
  $("#authPassword")?.addEventListener("keydown",e=>{if(e.key==="Enter"){e.preventDefault();loginAction("login");}});
  $("#authGoogle")?.addEventListener("click",async()=>{
   authStatus.textContent="Membuka login Google…";
