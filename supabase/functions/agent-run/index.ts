@@ -30,7 +30,7 @@ Deno.serve(async (req: Request) => {
   const supabaseUrl = "https://zcwiuvawmovkfbalgyyx.supabase.co";
   const publishableKey = Deno.env.get("SUPABASE_PUBLISHABLE_KEY") || "sb_publishable_t0EIetmfeeU_ZjlMVVv-Kg_dDYjFubn";
   const authorization = req.headers.get("authorization") || "";
-  const bearer = authorization.match(/^Bearer\\s+(.+)$/i)?.[1];
+  const bearer = authorization.match(/^Bearer\s+(.+)$/i)?.[1];
   if (!publishableKey || !bearer || bearer === publishableKey) return respond({ ok: false, error: "Sesi pengguna tidak valid. Muat ulang aplikasi dan coba lagi." }, 401, origin);
   try {
     const authResponse = await fetch(supabaseUrl + "/auth/v1/user", { headers: { apikey: publishableKey, Authorization: "Bearer " + bearer }, signal: AbortSignal.timeout(8000) });
