@@ -39,13 +39,13 @@ async function readPublicShopeePage(inputUrl: string): Promise<Record<string, un
     if (!response || !response.ok) return { url: current.toString(), status: response?.status ?? 0, note: "Shopee page inaccessible or blocked; fields are unverified." };
     const page = (await response.text()).slice(0, 1500000);
     const meta: Record<string,string> = {};
-    for (const tag of page.match(/<meta\\b[^>]*>/gi) ?? []) {
-      const attr = (name: string) => tag.match(new RegExp("(?:^|\\\\s)" + name + "\\\\s*=\\\\s*[\\\"']([^\\\"']*)[\\\"']", "i"))?.[1];
+    for (const tag of page.match(/<meta\b[^>]*>/gi) ?? []) {
+      const attr = (name: string) => tag.match(new RegExp("(?:^|\\s)" + name + "\\s*=\\s*[\\\"']([^\\\"']*)[\\\"']", "i"))?.[1];
       const key = (attr("property") ?? attr("name") ?? "").toLowerCase();
       const value = attr("content");
       if (key && value && !meta[key]) meta[key] = value.replace(/&amp;/g,"&").replace(/&quot;/g,'"').slice(0,500);
     }
-    const title = meta["og:title"] ?? page.match(/<title[^>]*>([\\s\\S]*?)<\\/title>/i)?.[1]?.replace(/<[^>]+>/g,"").slice(0,300);
+    const title = meta["og:title"] ?? page.match(/<title[^>]*>([\s\S]*?)<\/title>/i)?.[1]?.replace(/<[^>]+>/g,"").slice(0,300);
     return { url: current.toString(), status: response.status, title, description: meta["og:description"] ?? meta["description"], price: meta["product:price:amount"] ?? meta["og:price:amount"], rating: meta["product:rating:value"], reviewCount: meta["product:rating:count"], availability: meta["product:availability"], note: "Only explicit public HTML metadata is extracted; missing fields remain unknown." };
   } catch (e) {
     return { url: current.toString(), status: 0, note: e instanceof DOMException && e.name === "TimeoutError" ? "Shopee page fetch timed out." : "Shopee page fetch failed; use official affiliate export or screenshots." };
